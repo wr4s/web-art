@@ -7,20 +7,20 @@
  Y888P  ~Y8888P' Y888888P      888888D      Y88888P ~Y8888P' YP   YP  CONVERTER 
 ]=]
 
--- Instances: 53 | Scripts: 14 | Modules: 0 | Tags: 0
+-- Instances: 54 | Scripts: 15 | Modules: 0 | Tags: 0
 local G2L = {};
 
--- ReplicatedFirst.ScreenGui
+-- StarterGui.ScreenGui
 G2L["1"] = Instance.new("ScreenGui", game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"));
 
 
 
--- ReplicatedFirst.ScreenGui.LocalScript
+-- StarterGui.ScreenGui.LocalScript
 G2L["2"] = Instance.new("LocalScript", G2L["1"]);
 
 
 
--- ReplicatedFirst.ScreenGui.Fanta
+-- StarterGui.ScreenGui.Fanta
 G2L["3"] = Instance.new("Frame", G2L["1"]);
 G2L["3"]["BorderSizePixel"] = 0;
 G2L["3"]["BackgroundColor3"] = Color3.fromRGB(52, 68, 110);
@@ -31,7 +31,7 @@ G2L["3"]["Name"] = [[Fanta]];
 G2L["3"]["BackgroundTransparency"] = 0.1;
 
 
--- ReplicatedFirst.ScreenGui.Fanta.aim
+-- StarterGui.ScreenGui.Fanta.aim
 G2L["4"] = Instance.new("TextButton", G2L["3"]);
 G2L["4"]["BorderSizePixel"] = 0;
 G2L["4"]["TextSize"] = 14;
@@ -46,12 +46,12 @@ G2L["4"]["Text"] = [[Aim]];
 G2L["4"]["Position"] = UDim2.new(0.01533, 0, 0.04612, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.aim.LocalScript
+-- StarterGui.ScreenGui.Fanta.aim.LocalScript
 G2L["5"] = Instance.new("LocalScript", G2L["4"]);
 
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visual
+-- StarterGui.ScreenGui.Fanta.visual
 G2L["6"] = Instance.new("TextButton", G2L["3"]);
 G2L["6"]["BorderSizePixel"] = 0;
 G2L["6"]["TextSize"] = 14;
@@ -66,12 +66,12 @@ G2L["6"]["Text"] = [[Visuals]];
 G2L["6"]["Position"] = UDim2.new(0.01533, 0, 0.24515, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visual.LocalScript
+-- StarterGui.ScreenGui.Fanta.visual.LocalScript
 G2L["7"] = Instance.new("LocalScript", G2L["6"]);
 
 
 
--- ReplicatedFirst.ScreenGui.Fanta.misc
+-- StarterGui.ScreenGui.Fanta.misc
 G2L["8"] = Instance.new("TextButton", G2L["3"]);
 G2L["8"]["BorderSizePixel"] = 0;
 G2L["8"]["TextSize"] = 14;
@@ -86,12 +86,12 @@ G2L["8"]["Text"] = [[Misc]];
 G2L["8"]["Position"] = UDim2.new(0.01533, 0, 0.44903, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.misc.LocalScript
+-- StarterGui.ScreenGui.Fanta.misc.LocalScript
 G2L["9"] = Instance.new("LocalScript", G2L["8"]);
 
 
 
--- ReplicatedFirst.ScreenGui.Fanta.hvhTab
+-- StarterGui.ScreenGui.Fanta.hvhTab
 G2L["a"] = Instance.new("TextButton", G2L["3"]);
 G2L["a"]["BorderSizePixel"] = 0;
 G2L["a"]["TextSize"] = 14;
@@ -106,18 +106,18 @@ G2L["a"]["Text"] = [[HvH]];
 G2L["a"]["Position"] = UDim2.new(0.01533, 0, 0.65291, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.hvhTab.LocalScript
+-- StarterGui.ScreenGui.Fanta.hvhTab.LocalScript
 G2L["b"] = Instance.new("LocalScript", G2L["a"]);
 
 
 
--- ReplicatedFirst.ScreenGui.Fanta.UIStroke
+-- StarterGui.ScreenGui.Fanta.UIStroke
 G2L["c"] = Instance.new("UIStroke", G2L["3"]);
 G2L["c"]["Thickness"] = 0.6;
 G2L["c"]["Color"] = Color3.fromRGB(255, 255, 255);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.topbar
+-- StarterGui.ScreenGui.Fanta.topbar
 G2L["d"] = Instance.new("Frame", G2L["3"]);
 G2L["d"]["BorderSizePixel"] = 0;
 G2L["d"]["BackgroundColor3"] = Color3.fromRGB(204, 116, 9);
@@ -128,13 +128,13 @@ G2L["d"]["Name"] = [[topbar]];
 G2L["d"]["BackgroundTransparency"] = 0.2;
 
 
--- ReplicatedFirst.ScreenGui.Fanta.topbar.UIStroke
+-- StarterGui.ScreenGui.Fanta.topbar.UIStroke
 G2L["e"] = Instance.new("UIStroke", G2L["d"]);
 G2L["e"]["Thickness"] = 0.6;
 G2L["e"]["Color"] = Color3.fromRGB(255, 255, 255);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.topbar.TextLabel
+-- StarterGui.ScreenGui.Fanta.topbar.TextLabel
 G2L["f"] = Instance.new("TextLabel", G2L["d"]);
 G2L["f"]["BorderSizePixel"] = 0;
 G2L["f"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
@@ -148,7 +148,7 @@ G2L["f"]["Text"] = [[Fanta.Crim]];
 G2L["f"]["Position"] = UDim2.new(0.32879, 0, -0.61476, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visTab
+-- StarterGui.ScreenGui.Fanta.visTab
 G2L["10"] = Instance.new("Frame", G2L["3"]);
 G2L["10"]["Visible"] = false;
 G2L["10"]["BorderSizePixel"] = 0;
@@ -160,13 +160,13 @@ G2L["10"]["Name"] = [[visTab]];
 G2L["10"]["BackgroundTransparency"] = 1;
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visTab.UIStroke
+-- StarterGui.ScreenGui.Fanta.visTab.UIStroke
 G2L["11"] = Instance.new("UIStroke", G2L["10"]);
 G2L["11"]["Thickness"] = 0.6;
 G2L["11"]["Color"] = Color3.fromRGB(255, 255, 255);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visTab.box
+-- StarterGui.ScreenGui.Fanta.visTab.box
 G2L["12"] = Instance.new("TextButton", G2L["10"]);
 G2L["12"]["TextSize"] = 14;
 G2L["12"]["TextColor3"] = Color3.fromRGB(0, 0, 0);
@@ -179,12 +179,12 @@ G2L["12"]["Text"] = [[]];
 G2L["12"]["Position"] = UDim2.new(0.06104, 0, 0.01935, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visTab.box.LocalScript
+-- StarterGui.ScreenGui.Fanta.visTab.box.LocalScript
 G2L["13"] = Instance.new("LocalScript", G2L["12"]);
 
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visTab.TextLabel
+-- StarterGui.ScreenGui.Fanta.visTab.TextLabel
 G2L["14"] = Instance.new("TextLabel", G2L["10"]);
 G2L["14"]["BorderSizePixel"] = 0;
 G2L["14"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
@@ -198,7 +198,7 @@ G2L["14"]["Text"] = [[Enable]];
 G2L["14"]["Position"] = UDim2.new(0.04608, 0, -0.02479, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visTab.chams
+-- StarterGui.ScreenGui.Fanta.visTab.chams
 G2L["15"] = Instance.new("TextButton", G2L["10"]);
 G2L["15"]["TextSize"] = 14;
 G2L["15"]["TextColor3"] = Color3.fromRGB(0, 0, 0);
@@ -211,12 +211,12 @@ G2L["15"]["Text"] = [[]];
 G2L["15"]["Position"] = UDim2.new(0.06104, 0, 0.17517, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visTab.chams.LocalScript
+-- StarterGui.ScreenGui.Fanta.visTab.chams.LocalScript
 G2L["16"] = Instance.new("LocalScript", G2L["15"]);
 
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visTab.TextLabel
+-- StarterGui.ScreenGui.Fanta.visTab.TextLabel
 G2L["17"] = Instance.new("TextLabel", G2L["10"]);
 G2L["17"]["BorderSizePixel"] = 0;
 G2L["17"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
@@ -230,7 +230,7 @@ G2L["17"]["Text"] = [[Chams]];
 G2L["17"]["Position"] = UDim2.new(0.07834, 0, 0.15702, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visTab.health
+-- StarterGui.ScreenGui.Fanta.visTab.health
 G2L["18"] = Instance.new("TextButton", G2L["10"]);
 G2L["18"]["TextSize"] = 14;
 G2L["18"]["TextColor3"] = Color3.fromRGB(0, 0, 0);
@@ -243,12 +243,12 @@ G2L["18"]["Text"] = [[]];
 G2L["18"]["Position"] = UDim2.new(0.06104, 0, 0.27243, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visTab.health.LocalScript
+-- StarterGui.ScreenGui.Fanta.visTab.health.LocalScript
 G2L["19"] = Instance.new("LocalScript", G2L["18"]);
 
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visTab.TextLabel
+-- StarterGui.ScreenGui.Fanta.visTab.TextLabel
 G2L["1a"] = Instance.new("TextLabel", G2L["10"]);
 G2L["1a"]["BorderSizePixel"] = 0;
 G2L["1a"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
@@ -262,7 +262,7 @@ G2L["1a"]["Text"] = [[Health bar]];
 G2L["1a"]["Position"] = UDim2.new(0.1106, 0, 0.25344, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visTab.name
+-- StarterGui.ScreenGui.Fanta.visTab.name
 G2L["1b"] = Instance.new("TextButton", G2L["10"]);
 G2L["1b"]["TextSize"] = 14;
 G2L["1b"]["TextColor3"] = Color3.fromRGB(0, 0, 0);
@@ -275,12 +275,12 @@ G2L["1b"]["Text"] = [[]];
 G2L["1b"]["Position"] = UDim2.new(0.06104, 0, 0.38314, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visTab.name.LocalScript
+-- StarterGui.ScreenGui.Fanta.visTab.name.LocalScript
 G2L["1c"] = Instance.new("LocalScript", G2L["1b"]);
 
 
 
--- ReplicatedFirst.ScreenGui.Fanta.visTab.TextLabel
+-- StarterGui.ScreenGui.Fanta.visTab.TextLabel
 G2L["1d"] = Instance.new("TextLabel", G2L["10"]);
 G2L["1d"]["BorderSizePixel"] = 0;
 G2L["1d"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
@@ -294,7 +294,7 @@ G2L["1d"]["Text"] = [[Name ESP]];
 G2L["1d"]["Position"] = UDim2.new(0.1106, 0, 0.36639, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.aimTab
+-- StarterGui.ScreenGui.Fanta.aimTab
 G2L["1e"] = Instance.new("Frame", G2L["3"]);
 G2L["1e"]["Visible"] = false;
 G2L["1e"]["BorderSizePixel"] = 0;
@@ -306,13 +306,13 @@ G2L["1e"]["Name"] = [[aimTab]];
 G2L["1e"]["BackgroundTransparency"] = 1;
 
 
--- ReplicatedFirst.ScreenGui.Fanta.aimTab.UIStroke
+-- StarterGui.ScreenGui.Fanta.aimTab.UIStroke
 G2L["1f"] = Instance.new("UIStroke", G2L["1e"]);
 G2L["1f"]["Thickness"] = 0.6;
 G2L["1f"]["Color"] = Color3.fromRGB(255, 255, 255);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.aimTab.aimbot
+-- StarterGui.ScreenGui.Fanta.aimTab.aimbot
 G2L["20"] = Instance.new("TextButton", G2L["1e"]);
 G2L["20"]["TextSize"] = 14;
 G2L["20"]["TextColor3"] = Color3.fromRGB(0, 0, 0);
@@ -325,12 +325,12 @@ G2L["20"]["Text"] = [[]];
 G2L["20"]["Position"] = UDim2.new(0.06104, 0, 0.01935, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.aimTab.aimbot.LocalScript
+-- StarterGui.ScreenGui.Fanta.aimTab.aimbot.LocalScript
 G2L["21"] = Instance.new("LocalScript", G2L["20"]);
 
 
 
--- ReplicatedFirst.ScreenGui.Fanta.aimTab.TextLabel
+-- StarterGui.ScreenGui.Fanta.aimTab.TextLabel
 G2L["22"] = Instance.new("TextLabel", G2L["1e"]);
 G2L["22"]["BorderSizePixel"] = 0;
 G2L["22"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
@@ -344,7 +344,7 @@ G2L["22"]["Text"] = [[Aimbot]];
 G2L["22"]["Position"] = UDim2.new(0.13134, 0, -0.00268, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.misTab
+-- StarterGui.ScreenGui.Fanta.misTab
 G2L["23"] = Instance.new("Frame", G2L["3"]);
 G2L["23"]["Visible"] = false;
 G2L["23"]["BorderSizePixel"] = 0;
@@ -356,13 +356,13 @@ G2L["23"]["Name"] = [[misTab]];
 G2L["23"]["BackgroundTransparency"] = 1;
 
 
--- ReplicatedFirst.ScreenGui.Fanta.misTab.UIStroke
+-- StarterGui.ScreenGui.Fanta.misTab.UIStroke
 G2L["24"] = Instance.new("UIStroke", G2L["23"]);
 G2L["24"]["Thickness"] = 0.6;
 G2L["24"]["Color"] = Color3.fromRGB(255, 255, 255);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.misTab.fov
+-- StarterGui.ScreenGui.Fanta.misTab.fov
 G2L["25"] = Instance.new("TextButton", G2L["23"]);
 G2L["25"]["TextSize"] = 14;
 G2L["25"]["TextColor3"] = Color3.fromRGB(0, 0, 0);
@@ -375,7 +375,7 @@ G2L["25"]["Text"] = [[]];
 G2L["25"]["Position"] = UDim2.new(0.09356, 0, 0.02629, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.misTab.fov.slider
+-- StarterGui.ScreenGui.Fanta.misTab.fov.slider
 G2L["26"] = Instance.new("Frame", G2L["25"]);
 G2L["26"]["BorderSizePixel"] = 0;
 G2L["26"]["BackgroundColor3"] = Color3.fromRGB(22, 118, 0);
@@ -385,12 +385,12 @@ G2L["26"]["BorderColor3"] = Color3.fromRGB(0, 0, 0);
 G2L["26"]["Name"] = [[slider]];
 
 
--- ReplicatedFirst.ScreenGui.Fanta.misTab.fov.slider.UIStroke
+-- StarterGui.ScreenGui.Fanta.misTab.fov.slider.UIStroke
 G2L["27"] = Instance.new("UIStroke", G2L["26"]);
 G2L["27"]["Color"] = Color3.fromRGB(255, 255, 255);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.misTab.fov.slider.sliderKnob
+-- StarterGui.ScreenGui.Fanta.misTab.fov.slider.sliderKnob
 G2L["28"] = Instance.new("Frame", G2L["26"]);
 G2L["28"]["BorderSizePixel"] = 0;
 G2L["28"]["BackgroundColor3"] = Color3.fromRGB(52, 68, 110);
@@ -400,7 +400,7 @@ G2L["28"]["BorderColor3"] = Color3.fromRGB(0, 0, 0);
 G2L["28"]["Name"] = [[sliderKnob]];
 
 
--- ReplicatedFirst.ScreenGui.Fanta.misTab.fov.slider.sliderKnob.sliderValue
+-- StarterGui.ScreenGui.Fanta.misTab.fov.slider.sliderKnob.sliderValue
 G2L["29"] = Instance.new("TextLabel", G2L["28"]);
 G2L["29"]["BorderSizePixel"] = 0;
 G2L["29"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
@@ -415,12 +415,12 @@ G2L["29"]["Name"] = [[sliderValue]];
 G2L["29"]["Position"] = UDim2.new(-0.46667, 0, -1.46154, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.misTab.fov.LocalScript
+-- StarterGui.ScreenGui.Fanta.misTab.fov.LocalScript
 G2L["2a"] = Instance.new("LocalScript", G2L["25"]);
 
 
 
--- ReplicatedFirst.ScreenGui.Fanta.misTab.fov.TextLabel
+-- StarterGui.ScreenGui.Fanta.misTab.fov.TextLabel
 G2L["2b"] = Instance.new("TextLabel", G2L["25"]);
 G2L["2b"]["BorderSizePixel"] = 0;
 G2L["2b"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
@@ -434,7 +434,7 @@ G2L["2b"]["Text"] = [[Override FOV]];
 G2L["2b"]["Position"] = UDim2.new(1.82353, 0, -0.45711, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.misTab.chat
+-- StarterGui.ScreenGui.Fanta.misTab.chat
 G2L["2c"] = Instance.new("TextButton", G2L["23"]);
 G2L["2c"]["TextSize"] = 14;
 G2L["2c"]["TextColor3"] = Color3.fromRGB(0, 0, 0);
@@ -447,7 +447,7 @@ G2L["2c"]["Text"] = [[]];
 G2L["2c"]["Position"] = UDim2.new(0.09356, 0, 0.22463, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.misTab.chat.TextLabel
+-- StarterGui.ScreenGui.Fanta.misTab.chat.TextLabel
 G2L["2d"] = Instance.new("TextLabel", G2L["2c"]);
 G2L["2d"]["BorderSizePixel"] = 0;
 G2L["2d"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
@@ -461,12 +461,12 @@ G2L["2d"]["Text"] = [[Chat Reveal]];
 G2L["2d"]["Position"] = UDim2.new(1.41176, 0, -0.45711, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.misTab.chat.LocalScript
+-- StarterGui.ScreenGui.Fanta.misTab.chat.LocalScript
 G2L["2e"] = Instance.new("LocalScript", G2L["2c"]);
 
 
 
--- ReplicatedFirst.ScreenGui.Fanta.settingsTab
+-- StarterGui.ScreenGui.Fanta.settingsTab
 G2L["2f"] = Instance.new("Frame", G2L["3"]);
 G2L["2f"]["Visible"] = false;
 G2L["2f"]["BorderSizePixel"] = 0;
@@ -478,13 +478,13 @@ G2L["2f"]["Name"] = [[settingsTab]];
 G2L["2f"]["BackgroundTransparency"] = 1;
 
 
--- ReplicatedFirst.ScreenGui.Fanta.settingsTab.UIStroke
+-- StarterGui.ScreenGui.Fanta.settingsTab.UIStroke
 G2L["30"] = Instance.new("UIStroke", G2L["2f"]);
 G2L["30"]["Thickness"] = 0.6;
 G2L["30"]["Color"] = Color3.fromRGB(255, 255, 255);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.settingsTab.fakelag
+-- StarterGui.ScreenGui.Fanta.settingsTab.fakelag
 G2L["31"] = Instance.new("TextButton", G2L["2f"]);
 G2L["31"]["TextSize"] = 14;
 G2L["31"]["TextColor3"] = Color3.fromRGB(0, 0, 0);
@@ -497,7 +497,7 @@ G2L["31"]["Text"] = [[]];
 G2L["31"]["Position"] = UDim2.new(0.09356, 0, 0.02629, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.settingsTab.fakelag.TextLabel
+-- StarterGui.ScreenGui.Fanta.settingsTab.fakelag.TextLabel
 G2L["32"] = Instance.new("TextLabel", G2L["31"]);
 G2L["32"]["BorderSizePixel"] = 0;
 G2L["32"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
@@ -511,12 +511,12 @@ G2L["32"]["Text"] = [[Fakelag]];
 G2L["32"]["Position"] = UDim2.new(0.47059, 0, -0.45711, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.settingsTab.fakelag.LocalScript
+-- StarterGui.ScreenGui.Fanta.settingsTab.fakelag.LocalScript
 G2L["33"] = Instance.new("LocalScript", G2L["31"]);
 
 
 
--- ReplicatedFirst.ScreenGui.Fanta.discord
+-- StarterGui.ScreenGui.Fanta.discord
 G2L["34"] = Instance.new("TextLabel", G2L["3"]);
 G2L["34"]["BorderSizePixel"] = 0;
 G2L["34"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
@@ -531,12 +531,17 @@ G2L["34"]["Name"] = [[discord]];
 G2L["34"]["Position"] = UDim2.new(0.12606, 0, 0.94903, 0);
 
 
--- ReplicatedFirst.ScreenGui.Fanta.drag
+-- StarterGui.ScreenGui.Fanta.drag
 G2L["35"] = Instance.new("LocalScript", G2L["3"]);
 G2L["35"]["Name"] = [[drag]];
 
 
--- ReplicatedFirst.ScreenGui.LocalScript
+-- StarterGui.ScreenGui.LocalScript
+G2L["36"] = Instance.new("LocalScript", G2L["1"]);
+
+
+
+-- StarterGui.ScreenGui.LocalScript
 local function C_2()
 local script = G2L["2"];
 	-- Variables
@@ -563,7 +568,7 @@ local script = G2L["2"];
 	
 end;
 task.spawn(C_2);
--- ReplicatedFirst.ScreenGui.Fanta.aim.LocalScript
+-- StarterGui.ScreenGui.Fanta.aim.LocalScript
 local function C_5()
 local script = G2L["5"];
 	script.Parent.MouseButton1Click:Connect(function()
@@ -577,7 +582,7 @@ local script = G2L["5"];
 	
 end;
 task.spawn(C_5);
--- ReplicatedFirst.ScreenGui.Fanta.visual.LocalScript
+-- StarterGui.ScreenGui.Fanta.visual.LocalScript
 local function C_7()
 local script = G2L["7"];
 	script.Parent.MouseButton1Click:Connect(function()
@@ -591,7 +596,7 @@ local script = G2L["7"];
 	
 end;
 task.spawn(C_7);
--- ReplicatedFirst.ScreenGui.Fanta.misc.LocalScript
+-- StarterGui.ScreenGui.Fanta.misc.LocalScript
 local function C_9()
 local script = G2L["9"];
 	script.Parent.MouseButton1Click:Connect(function()
@@ -605,7 +610,7 @@ local script = G2L["9"];
 	
 end;
 task.spawn(C_9);
--- ReplicatedFirst.ScreenGui.Fanta.hvhTab.LocalScript
+-- StarterGui.ScreenGui.Fanta.hvhTab.LocalScript
 local function C_b()
 local script = G2L["b"];
 	script.Parent.MouseButton1Click:Connect(function()
@@ -619,7 +624,7 @@ local script = G2L["b"];
 	
 end;
 task.spawn(C_b);
--- ReplicatedFirst.ScreenGui.Fanta.visTab.box.LocalScript
+-- StarterGui.ScreenGui.Fanta.visTab.box.LocalScript
 local function C_13()
 local script = G2L["13"];
 	-- References to the button and services
@@ -740,7 +745,7 @@ local script = G2L["13"];
 	
 end;
 task.spawn(C_13);
--- ReplicatedFirst.ScreenGui.Fanta.visTab.chams.LocalScript
+-- StarterGui.ScreenGui.Fanta.visTab.chams.LocalScript
 local function C_16()
 local script = G2L["16"];
 	local FillColor = Color3.fromRGB(175, 25, 255)
@@ -827,7 +832,7 @@ local script = G2L["16"];
 	end)
 end;
 task.spawn(C_16);
--- ReplicatedFirst.ScreenGui.Fanta.visTab.health.LocalScript
+-- StarterGui.ScreenGui.Fanta.visTab.health.LocalScript
 local function C_19()
 local script = G2L["19"];
 	local Settings = {
@@ -936,7 +941,7 @@ local script = G2L["19"];
 	
 end;
 task.spawn(C_19);
--- ReplicatedFirst.ScreenGui.Fanta.visTab.name.LocalScript
+-- StarterGui.ScreenGui.Fanta.visTab.name.LocalScript
 local function C_1c()
 local script = G2L["1c"];
 	local player = game:GetService("Players").LocalPlayer
@@ -1024,7 +1029,7 @@ local script = G2L["1c"];
 	
 end;
 task.spawn(C_1c);
--- ReplicatedFirst.ScreenGui.Fanta.aimTab.aimbot.LocalScript
+-- StarterGui.ScreenGui.Fanta.aimTab.aimbot.LocalScript
 local function C_21()
 local script = G2L["21"];
 	-- UI Button Setup (For toggling)
@@ -1159,7 +1164,7 @@ local script = G2L["21"];
 	
 end;
 task.spawn(C_21);
--- ReplicatedFirst.ScreenGui.Fanta.misTab.fov.LocalScript
+-- StarterGui.ScreenGui.Fanta.misTab.fov.LocalScript
 local function C_2a()
 local script = G2L["2a"];
 	-- Variables
@@ -1254,7 +1259,7 @@ local script = G2L["2a"];
 	
 end;
 task.spawn(C_2a);
--- ReplicatedFirst.ScreenGui.Fanta.misTab.chat.LocalScript
+-- StarterGui.ScreenGui.Fanta.misTab.chat.LocalScript
 local function C_2e()
 local script = G2L["2e"];
 	-- // Services
@@ -1285,7 +1290,7 @@ local script = G2L["2e"];
 	
 end;
 task.spawn(C_2e);
--- ReplicatedFirst.ScreenGui.Fanta.settingsTab.fakelag.LocalScript
+-- StarterGui.ScreenGui.Fanta.settingsTab.fakelag.LocalScript
 local function C_33()
 local script = G2L["33"];
 	-- Variables
@@ -1384,7 +1389,7 @@ local script = G2L["33"];
 	
 end;
 task.spawn(C_33);
--- ReplicatedFirst.ScreenGui.Fanta.drag
+-- StarterGui.ScreenGui.Fanta.drag
 local function C_35()
 local script = G2L["35"];
 	-- Variables
@@ -1485,5 +1490,13 @@ local script = G2L["35"];
 	
 end;
 task.spawn(C_35);
+-- StarterGui.ScreenGui.LocalScript
+local function C_36()
+local script = G2L["36"];
+	local screenGui = script.Parent -- Assuming the script is a child of the ScreenGui
+	screenGui.ResetOnSpawn = false
+	
+end;
+task.spawn(C_36);
 
 return G2L["1"], require;
