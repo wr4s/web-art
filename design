@@ -1032,6 +1032,39 @@ task.spawn(C_1c);
 -- StarterGui.ScreenGui.Fanta.aimTab.aimbot.LocalScript
 local function C_21()
 local script = G2L["21"];
+	-- UI Button Setup (For toggling)
+	local masterButton = script.Parent -- Assuming the script is inside the button
+	local activeColor = Color3.fromRGB(51, 67, 109) -- Color when active (on)
+	local inactiveColor = Color3.fromRGB(21, 117, 0) -- Color when inactive (off)
+	local isAimlockActive = false -- Tracks whether aimlock is active
+	
+	local AimlockTarget
+	local AimPart = "HumanoidRootPart" -- For R15 Games: {UpperTorso, LowerTorso, HumanoidRootPart, Head} | For R6 Games: {Head, Torso, HumanoidRootPart}
+	local AimRadius = 50 -- Locking range
+	local TeamCheck = false -- Team Check: False means can lock onto teammates
+	local PredictMovement = true -- Predicts movement of the target
+	local PredictionVelocity = 10 -- Speed of Prediction
+	
+	-- Change button color to active or inactive
+	local function setActiveColor()
+		masterButton.BackgroundColor3 = activeColor
+	end
+	
+	local function setInactiveColor()
+		masterButton.BackgroundColor3 = inactiveColor
+	end
+	
+	-- Set initial button color
+	setInactiveColor()
+	
+	-- Initialize Services and Variables
+	local Players, Uis, RService, SGui = game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService"), game:GetService("StarterGui")
+	local Client, Mouse, Camera = Players.LocalPlayer, Players.LocalPlayer:GetMouse(), workspace.CurrentCamera
+	local Aimlock = true
+	local MousePressed = false
+	local CanNotify = false
+	
+	-- Function to get the nearest target
 	local function GetNearestTarget()
 		local players = {}
 		local PLAYER_HOLD = {}
@@ -1044,10 +1077,10 @@ local script = G2L["21"];
 		end
 	
 		for i, v in pairs(players) do
-			if v.Character and v.Character:FindFirstChild("Head") then -- Check if Character and Head exist
+			if v.Character ~= nil then
 				local AIM = v.Character:FindFirstChild("Head")
 				if TeamCheck == true and v.Team ~= Client.Team then
-					local DISTANCE = (AIM.Position - Camera.CFrame.p).magnitude
+					local DISTANCE = (v.Character:FindFirstChild("Head").Position - Camera.CFrame.p).magnitude
 					local RAY = Ray.new(Camera.CFrame.p, (Mouse.Hit.p - Camera.CFrame.p).unit * DISTANCE)
 					local HIT, POS = workspace:FindPartOnRay(RAY, workspace)
 					local DIFF = math.floor((POS - AIM.Position).magnitude)
@@ -1057,7 +1090,7 @@ local script = G2L["21"];
 					PLAYER_HOLD[v.Name .. i].diff = DIFF
 					table.insert(DISTANCES, DIFF)
 				elseif TeamCheck == false and v.Team == Client.Team then
-					local DISTANCE = (AIM.Position - Camera.CFrame.p).magnitude
+					local DISTANCE = (v.Character:FindFirstChild("Head").Position - Camera.CFrame.p).magnitude
 					local RAY = Ray.new(Camera.CFrame.p, (Mouse.Hit.p - Camera.CFrame.p).unit * DISTANCE)
 					local HIT, POS = workspace:FindPartOnRay(RAY, workspace)
 					local DIFF = math.floor((POS - AIM.Position).magnitude)
@@ -1086,6 +1119,48 @@ local script = G2L["21"];
 		end
 		return nil
 	end
+	
+	-- UI Button click connection
+	masterButton.MouseButton1Click:Connect(function()
+		isAimlockActive = not isAimlockActive
+		if isAimlockActive then
+			setActiveColor()
+		else
+			setInactiveColor()
+		end
+	end)
+	
+	Uis.InputBegan:Connect(function(Key)
+		if Key.UserInputType == Enum.UserInputType.MouseButton2 then
+			if not MousePressed then
+				MousePressed = true
+				local Target = GetNearestTarget()
+				if Target then
+					AimlockTarget = Target
+				end
+			end
+		end
+	end)
+	
+	Uis.InputEnded:Connect(function(Key)
+		if Key.UserInputType == Enum.UserInputType.MouseButton2 then
+			AimlockTarget = nil
+			MousePressed = false
+		end
+	end)
+	
+	RService.RenderStepped:Connect(function()
+		if isAimlockActive and MousePressed then
+			if AimlockTarget and AimlockTarget.Character and AimlockTarget.Character:FindFirstChild(AimPart) then
+				local TargetPos = AimlockTarget.Character[AimPart].Position
+				if PredictMovement then
+					Camera.CFrame = CFrame.new(Camera.CFrame.p, TargetPos + AimlockTarget.Character[AimPart].Velocity / PredictionVelocity)
+				else
+					Camera.CFrame = CFrame.new(Camera.CFrame.p, TargetPos)
+				end
+			end
+		end
+	end)
 	
 end;
 task.spawn(C_21);
