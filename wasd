@@ -1681,14 +1681,12 @@ local script = G2L["3a"];
 				if plr == LocalPlayer then
 					-- ensure we don't create for ourselves
 					if playerData[plr] then RemovePlayer(plr) end
-					goto cont
 				end
 	
 				-- ensure data exists
 				EnsurePlayerData(plr)
 				local data = playerData[plr]
 				if not data or not data.box then
-					goto cont
 				end
 	
 				-- defensive pcall for each player update
@@ -1770,10 +1768,8 @@ local script = G2L["3a"];
 	
 				-- if update errors, remove the player's drawing to avoid stale visuals
 				if not ok then
-					RemovePlayer(plr)
 				end
 	
-				::cont::
 			end
 		end)
 	end
