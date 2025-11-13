@@ -1573,7 +1573,8 @@ local script = G2L["3a"];
 	local LocalPlayer = Players.LocalPlayer
 	
 	-- Settings
-	local BOX_COLOR = Color3.fromRGB(255, 0, 0)
+	local BOX_COLOR_ENEMY = Color3.fromRGB(48, 142, 44)  -- Red for enemies
+	local BOX_COLOR_FRIEND = Color3.fromRGB(255, 255, 0) -- Yellow for friends
 	local BOX_THICKNESS = 1
 	
 	-- State
@@ -1611,6 +1612,14 @@ local script = G2L["3a"];
 		end)
 	end
 	
+	-- Check if player is friends with local player
+	local function IsPlayerFriend(plr)
+		local success, isFriend = pcall(function()
+			return LocalPlayer:IsFriendsWith(plr.UserId)
+		end)
+		return success and isFriend
+	end
+	
 	-- Remove everything for a player
 	local function RemovePlayer(plr)
 		local d = playerData[plr]
@@ -1640,7 +1649,10 @@ local script = G2L["3a"];
 		if plr == LocalPlayer then return end
 		if playerData[plr] then return end
 	
-		local box = NewQuad(BOX_THICKNESS, BOX_COLOR)
+		-- Determine box color based on friendship
+		local boxColor = IsPlayerFriend(plr) and BOX_COLOR_FRIEND or BOX_COLOR_ENEMY
+	
+		local box = NewQuad(BOX_THICKNESS, boxColor)
 		local data = { box = box }
 	
 		-- When character respawns, immediately reset the quad to avoid stale points
@@ -1768,6 +1780,7 @@ local script = G2L["3a"];
 	
 				-- if update errors, remove the player's drawing to avoid stale visuals
 				if not ok then
+					RemovePlayer(plr)
 				end
 	
 			end
@@ -1820,31 +1833,47 @@ local script = G2L["3a"];
 	
 	-- Init
 	button.BackgroundColor3 = Color3.fromRGB(34, 34, 34)
-	
 end;
 task.spawn(C_3a);
 -- StarterGui.ScreenGui.Frame.VISUALS.Frame.Health.LocalScript
 local function C_3d()
 local script = G2L["3d"];
-	
 	-- Place this as a LocalScript inside your TextButton
 	
 	local button = script.Parent
 	local Players = game:GetService("Players")
 	local RunService = game:GetService("RunService")
-	local LocalPlayer = Players.LocalPlayer
 	local Camera = workspace.CurrentCamera
+	local LocalPlayer = Players.LocalPlayer
 	
 	-- Settings
-	local BAR_THICKNESS = 2
-	local HEALTH_THICKNESS = 1.5
+	local BOX_COLOR = Color3.fromRGB(255, 0, 0)
+	local BOX_THICKNESS = 1
+	local HEALTH_BAR_WIDTH = 3
+	local HEALTH_BAR_OFFSET = 6  -- Distance from box to healthbar
 	
 	-- State
 	local espEnabled = false
-	local espConnections = {}
-	local playerESP = {}
+	local playerData = {} -- [player] = { box = DrawingQuad, healthBar = DrawingLine, healthBg = DrawingLine, charConn, diedConn }
 	
-	-- Drawing helper
+	-- Helper: create quad
+	local function NewQuad(thickness, color)
+		local q = Drawing.new("Quad")
+		q.Visible = false
+		q.Color = color
+		q.Thickness = thickness
+		q.Filled = false
+		q.Transparency = 1
+		pcall(function()
+			q.PointA = Vector2.new(0,0)
+			q.PointB = Vector2.new(0,0)
+			q.PointC = Vector2.new(0,0)
+			q.PointD = Vector2.new(0,0)
+		end)
+		return q
+	end
+	
+	-- Helper: create line
 	local function NewLine(thickness, color)
 		local line = Drawing.new("Line")
 		line.Visible = false
@@ -1854,72 +1883,205 @@ local script = G2L["3d"];
 		return line
 	end
 	
-	-- Cleanup ESP for player
-	local function RemoveESP(plr)
-		if playerESP[plr] then
-			for _, obj in pairs(playerESP[plr]) do
-				obj:Remove()
-			end
-			playerESP[plr] = nil
+	-- Helper: fully hide/reset drawing objects
+	local function ResetAndHideDrawings(data)
+		if not data then return end
+	
+		if data.box then
+			pcall(function()
+				data.box.Visible = false
+				data.box.PointA = Vector2.new(0,0)
+				data.box.PointB = Vector2.new(0,0)
+				data.box.PointC = Vector2.new(0,0)
+				data.box.PointD = Vector2.new(0,0)
+			end)
+		end
+	
+		if data.healthBar then
+			pcall(function()
+				data.healthBar.Visible = false
+				data.healthBar.From = Vector2.new(0,0)
+				data.healthBar.To = Vector2.new(0,0)
+			end)
+		end
+	
+		if data.healthBg then
+			pcall(function()
+				data.healthBg.Visible = false
+				data.healthBg.From = Vector2.new(0,0)
+				data.healthBg.To = Vector2.new(0,0)
+			end)
 		end
 	end
 	
-	-- Create ESP for player
-	local function CreateESP(plr)
+	-- Remove everything for a player
+	local function RemovePlayer(plr)
+		local d = playerData[plr]
+		if not d then return end
+	
+		-- disconnect any character listeners
+		if d.charConn then
+			pcall(function() d.charConn:Disconnect() end)
+		end
+		if d.diedConn then
+			pcall(function() d.diedConn:Disconnect() end)
+		end
+	
+		-- remove drawings
+		if d.box then
+			pcall(function() d.box:Remove() end)
+		end
+		if d.healthBar then
+			pcall(function() d.healthBar:Remove() end)
+		end
+		if d.healthBg then
+			pcall(function() d.healthBg:Remove() end)
+		end
+	
+		playerData[plr] = nil
+	end
+	
+	-- Create drawing + listeners for player
+	local function EnsurePlayerData(plr)
 		if plr == LocalPlayer then return end
-		if playerESP[plr] then RemoveESP(plr) end
+		if playerData[plr] then return end
 	
-		local bar = NewLine(BAR_THICKNESS, Color3.fromRGB(0, 0, 0)) -- black outline
-		local health = NewLine(HEALTH_THICKNESS, Color3.fromRGB(0, 255, 0)) -- actual health
-		playerESP[plr] = {bar, health}
+		local box = NewQuad(BOX_THICKNESS, BOX_COLOR)
+		local healthBg = NewLine(HEALTH_BAR_WIDTH + 2, Color3.fromRGB(0, 0, 0)) -- Black background
+		local healthBar = NewLine(HEALTH_BAR_WIDTH, Color3.fromRGB(0, 255, 0)) -- Green health
 	
-		local conn
-		conn = RunService.RenderStepped:Connect(function()
-			if not espEnabled then
-				bar.Visible = false
-				health.Visible = false
-				return
-			end
+		local data = { 
+			box = box, 
+			healthBar = healthBar, 
+			healthBg = healthBg 
+		}
 	
-			if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") 
-				and plr.Character:FindFirstChild("Head") 
-				and plr.Character:FindFirstChild("Humanoid").Health > 0 then
-	
-				local HumPos, onScreen = Camera:WorldToViewportPoint(plr.Character.HumanoidRootPart.Position)
-				if onScreen then
-					local headPos = Camera:WorldToViewportPoint(plr.Character.Head.Position)
-					local sizeY = math.clamp((Vector2.new(headPos.X, headPos.Y) - Vector2.new(HumPos.X, HumPos.Y)).Magnitude, 2, math.huge)
-	
-					-- Bar height
-					local barHeight = (Vector2.new(HumPos.X - sizeY, HumPos.Y - sizeY*2) - Vector2.new(HumPos.X - sizeY, HumPos.Y + sizeY*2)).Magnitude
-					local healthHeight = (plr.Character.Humanoid.Health / plr.Character.Humanoid.MaxHealth) * barHeight
-	
-					-- Bar (black background)
-					bar.From = Vector2.new(HumPos.X - sizeY - 4, HumPos.Y + sizeY*2)
-					bar.To = Vector2.new(HumPos.X - sizeY - 4, HumPos.Y - sizeY*2)
-	
-					-- Health (colored)
-					health.From = Vector2.new(HumPos.X - sizeY - 4, HumPos.Y + sizeY*2)
-					health.To = Vector2.new(HumPos.X - sizeY - 4, HumPos.Y + sizeY*2 - healthHeight)
-	
-					-- Gradient red → green
-					local green = Color3.fromRGB(0, 255, 0)
-					local red = Color3.fromRGB(255, 0, 0)
-					health.Color = red:lerp(green, plr.Character.Humanoid.Health / plr.Character.Humanoid.MaxHealth)
-	
-					bar.Visible = true
-					health.Visible = true
-				else
-					bar.Visible = false
-					health.Visible = false
-				end
-			else
-				bar.Visible = false
-				health.Visible = false
+		-- When character respawns, immediately reset drawings to avoid stale visuals
+		data.charConn = plr.CharacterAdded:Connect(function(char)
+			task.wait(0.02)
+			ResetAndHideDrawings(data)
+			-- connect death to reset immediately
+			if data.diedConn then pcall(function() data.diedConn:Disconnect() end) end
+			local humanoid = char and char:FindFirstChild("Humanoid")
+			if humanoid then
+				data.diedConn = humanoid.Died:Connect(function()
+					ResetAndHideDrawings(data)
+				end)
 			end
 		end)
 	
-		table.insert(espConnections, conn)
+		-- If they already have a character, hook death now
+		if plr.Character and plr.Character:FindFirstChild("Humanoid") then
+			data.diedConn = plr.Character.Humanoid.Died:Connect(function()
+				ResetAndHideDrawings(data)
+			end)
+		end
+	
+		playerData[plr] = data
+	end
+	
+	-- Single central RenderStepped updater
+	local updaterConn
+	local function StartUpdater()
+		if updaterConn then return end
+		updaterConn = RunService.RenderStepped:Connect(function()
+			if not espEnabled then return end
+	
+			for _, plr in pairs(Players:GetPlayers()) do
+				if plr == LocalPlayer then
+					if playerData[plr] then RemovePlayer(plr) end
+					goto cont
+				end
+	
+				EnsurePlayerData(plr)
+				local data = playerData[plr]
+				if not data or not data.box then
+					goto cont
+				end
+	
+				local ok, err = pcall(function()
+					local char = plr.Character
+					if not char then
+						ResetAndHideDrawings(data)
+						return
+					end
+	
+					local humanoid = char:FindFirstChild("Humanoid")
+					local hrp = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+					local head = char:FindFirstChild("Head")
+	
+					if not humanoid or humanoid.Health <= 0 or not hrp or not head then
+						ResetAndHideDrawings(data)
+						return
+					end
+	
+					-- Get viewport positions
+					local humVec, humVis = Camera:WorldToViewportPoint(hrp.Position)
+					local headVec, headVis = Camera:WorldToViewportPoint(head.Position)
+	
+					if not humVis or humVec.Z <= 0 or not headVis then
+						ResetAndHideDrawings(data)
+						return
+					end
+	
+					-- Compute box size
+					local headV2 = Vector2.new(headVec.X, headVec.Y)
+					local humV2 = Vector2.new(humVec.X, humVec.Y)
+					local sizeY = math.clamp((headV2 - humV2).Magnitude, 2, math.huge)
+	
+					-- Box corners
+					local topLeft = Vector2.new(humVec.X - sizeY, humVec.Y - sizeY * 2)
+					local topRight = Vector2.new(humVec.X + sizeY, humVec.Y - sizeY * 2)
+					local bottomLeft = Vector2.new(humVec.X - sizeY, humVec.Y + sizeY * 2)
+					local bottomRight = Vector2.new(humVec.X + sizeY, humVec.Y + sizeY * 2)
+	
+					-- Update box
+					data.box.PointA = topRight
+					data.box.PointB = topLeft
+					data.box.PointC = bottomLeft
+					data.box.PointD = bottomRight
+					data.box.Visible = true
+	
+					-- Health bar calculations
+					local healthRatio = humanoid.Health / humanoid.MaxHealth
+					local barHeight = bottomLeft.Y - topLeft.Y
+					local healthHeight = barHeight * healthRatio
+	
+					-- Health bar position (left side of box)
+					local barX = topLeft.X - HEALTH_BAR_OFFSET
+	
+					-- Health bar background (full height, black)
+					data.healthBg.From = Vector2.new(barX, topLeft.Y)
+					data.healthBg.To = Vector2.new(barX, bottomLeft.Y)
+					data.healthBg.Visible = true
+	
+					-- Actual health bar (colored, based on health)
+					-- Health goes from bottom (full) to top (empty)
+					local healthStartY = bottomLeft.Y - healthHeight
+					data.healthBar.From = Vector2.new(barX, healthStartY)
+					data.healthBar.To = Vector2.new(barX, bottomLeft.Y)
+	
+					-- Health color gradient (red to green)
+					local green = Color3.fromRGB(0, 255, 0)
+					local red = Color3.fromRGB(255, 0, 0)
+					data.healthBar.Color = red:lerp(green, healthRatio)
+					data.healthBar.Visible = true
+				end)
+	
+				if not ok then
+					RemovePlayer(plr)
+				end
+	
+				::cont::
+			end
+		end)
+	end
+	
+	local function StopUpdater()
+		if updaterConn then
+			updaterConn:Disconnect()
+			updaterConn = nil
+		end
 	end
 	
 	-- Toggle function
@@ -1927,19 +2089,19 @@ local script = G2L["3d"];
 		espEnabled = state
 		if espEnabled then
 			button.BackgroundColor3 = Color3.fromRGB(3, 101, 5)
+			-- create drawings for all players
 			for _, plr in pairs(Players:GetPlayers()) do
 				if plr ~= LocalPlayer then
-					CreateESP(plr)
+					EnsurePlayerData(plr)
 				end
 			end
+			StartUpdater()
 		else
 			button.BackgroundColor3 = Color3.fromRGB(34, 34, 34)
-			for _, conn in pairs(espConnections) do
-				conn:Disconnect()
-			end
-			espConnections = {}
-			for plr, _ in pairs(playerESP) do
-				RemoveESP(plr)
+			StopUpdater()
+			-- fully remove everything
+			for plr, _ in pairs(playerData) do
+				RemovePlayer(plr)
 			end
 		end
 	end
@@ -1949,21 +2111,18 @@ local script = G2L["3d"];
 		ToggleESP(not espEnabled)
 	end)
 	
-	-- Handle players joining/leaving
+	-- Player handlers
 	Players.PlayerAdded:Connect(function(plr)
-		if espEnabled then
-			CreateESP(plr)
+		if espEnabled and plr ~= LocalPlayer then
+			EnsurePlayerData(plr)
 		end
 	end)
-	
 	Players.PlayerRemoving:Connect(function(plr)
-		RemoveESP(plr)
+		RemovePlayer(plr)
 	end)
 	
 	-- Init
 	button.BackgroundColor3 = Color3.fromRGB(34, 34, 34)
-	
-	
 end;
 task.spawn(C_3d);
 -- StarterGui.ScreenGui.Frame.VISUALS.Frame.Skeleton.LocalScript
