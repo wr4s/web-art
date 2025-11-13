@@ -2023,13 +2023,13 @@ local script = G2L["3d"];
 			for _, plr in pairs(Players:GetPlayers()) do
 				if plr == LocalPlayer then
 					if playerData[plr] then RemovePlayer(plr) end
-					goto cont
+
 				end
 	
 				EnsurePlayerData(plr)
 				local data = playerData[plr]
 				if not data or not data.box then
-					goto cont
+
 				end
 	
 				local ok, err = pcall(function()
@@ -2105,7 +2105,7 @@ local script = G2L["3d"];
 					RemovePlayer(plr)
 				end
 	
-				::cont::
+
 			end
 		end)
 	end
