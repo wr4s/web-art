@@ -1,65 +1,45 @@
--- ILO UI Library v1
--- Single-file loadstring-friendly UI library with animations & config system
--- Default theme: ORANGE (255,165,0)
--- Author: generated for you
+-- ILO UI Library — Template-aware rewrite (uses your provided GUI structure exactly)
+-- Drop this in as a single loadstring. It will use existing ScreenGui -> Window template if present.
+-- Default theme color (used only for themeable elements): orange (255,165,0)
+-- Author: revised for you (preserves original visuals & text colors)
 
-local ILO = {}
-ILO.__index = ILO
-
--- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
 
 local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
--- Executor FS compatibility helpers
-local has_writefile, has_readfile, has_isfolder, has_makefolder = false, false, false, false
+-- FS helpers (safe)
 local writefile_fn, readfile_fn, isfolder_fn, makefolder_fn, listfiles_fn
-
-if writefile then
-    has_writefile = true
-    writefile_fn = writefile
-end
-if readfile then
-    has_readfile = true
-    readfile_fn = readfile
-end
-if isfolder then
-    has_isfolder = true
-    isfolder_fn = isfolder
-end
-if makefolder then
-    has_makefolder = true
-    makefolder_fn = makefolder
-end
--- some executors provide listfiles
-if listfiles then
-    listfiles_fn = listfiles
-end
+if writefile  then writefile_fn = writefile end
+if readfile   then readfile_fn  = readfile end
+if isfolder   then isfolder_fn  = isfolder end
+if makefolder then makefolder_fn = makefolder end
+if listfiles  then listfiles_fn = listfiles end
 
 local function safe_makefolder(path)
-    if has_isfolder and has_makefolder then
+    if isfolder_fn and makefolder_fn then
         if not isfolder_fn(path) then
             pcall(function() makefolder_fn(path) end)
         end
-    elseif has_makefolder then
+    elseif makefolder_fn then
         pcall(function() makefolder_fn(path) end)
     end
 end
 local function safe_writefile(path, contents)
-    if has_writefile then
+    if writefile_fn then
         pcall(function() writefile_fn(path, contents) end)
         return true
     end
     return false
 end
 local function safe_readfile(path)
-    if has_readfile and pcall(function() readfile_fn(path) end) then
-        return readfile_fn(path)
+    if readfile_fn then
+        local ok, res = pcall(function() return readfile_fn(path) end)
+        if ok then return res end
     end
     return nil
 end
@@ -68,57 +48,48 @@ local function safe_listfiles(path)
         local ok, res = pcall(function() return listfiles_fn(path) end)
         if ok then return res end
     end
-    -- fallback: attempt to read directory by scanning known filenames in cfgs if available - not reliable
     return {}
 end
 
--- default theme (orange)
+-- Defaults
 local DEFAULT_THEME = Color3.fromRGB(255,165,0)
 local THEME = DEFAULT_THEME
+local CFG_ROOT = "ILO"
+local CFG_FOLDER = CFG_ROOT.."/cfgs"
 
--- Helpers
-local function new(instType, props)
-    local obj = Instance.new(instType)
+local function clamp(n,a,b) return math.max(a, math.min(b, n)) end
+
+-- Utility: create instance helper (tries to set properties safely)
+local function new(class, props)
+    local inst = Instance.new(class)
     if props then
         for k,v in pairs(props) do
-            if pcall(function() obj[k] = v end) then end
+            pcall(function() inst[k] = v end)
         end
     end
-    return obj
+    return inst
 end
 
-local function clamp(n, a, b) return math.max(a, math.min(b, n)) end
-
-local function deepTweenGuiTransparency(root, target, tweenInfo)
-    -- target: 0 for visible (transparent = 0 for backgrounds? we'll map)
-    -- We'll tween a set of common transparency properties for all descendants:
-    -- BackgroundTransparency, TextTransparency, ImageTransparency, ImageLabel etc.
-    tweenInfo = tweenInfo or TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+-- Deep tween transparency for entire UI (affects BackgroundTransparency, TextTransparency, ImageTransparency, UIStroke.Transparency)
+local function deepTweenTransparency(root, targetTransparency, tweenInfo)
+    tweenInfo = tweenInfo or TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     local tweens = {}
     local function collect(obj)
-        -- for every descendant, decide properties and tween them
         if obj:IsA("GuiObject") then
             local goals = {}
-            -- BackgroundTransparency (Frames, Buttons, etc)
-            if obj.BackgroundTransparency ~= nil then
-                goals.BackgroundTransparency = target
-            end
-            -- TextTransparency
-            if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-                goals.TextTransparency = target
-            end
-            -- ImageTransparency
-            if obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
-                goals.ImageTransparency = target
-            end
-            -- UIStroke
-            for _, child in ipairs(obj:GetChildren()) do
-                if child:IsA("UIStroke") then
-                    goals["UIStroke.Transparency"] = target
+            if obj:FindFirstChildOfClass("UIStroke") then
+                -- UIStroke only has Transparency property on the stroke object itself
+                local stroke = obj:FindFirstChildOfClass("UIStroke")
+                if stroke then
+                    table.insert(tweens, TweenService:Create(stroke, tweenInfo, {Transparency = targetTransparency}))
                 end
             end
-            -- UIGradient alpha isn't directly tweenable; if present we set its Transparency via a tweenable property:
-            -- But direct UIGradient.Transparency is NumberSequence; we can't tween easily. Skip.
+            -- background
+            if obj.BackgroundTransparency ~= nil then goals.BackgroundTransparency = targetTransparency end
+            -- text
+            if obj:IsA("TextLabel") or obj:IsA("TextBox") or obj:IsA("TextButton") then goals.TextTransparency = targetTransparency end
+            -- image
+            if obj:IsA("ImageLabel") or obj:IsA("ImageButton") then goals.ImageTransparency = targetTransparency end
             if next(goals) then
                 table.insert(tweens, TweenService:Create(obj, tweenInfo, goals))
             end
@@ -126,37 +97,221 @@ local function deepTweenGuiTransparency(root, target, tweenInfo)
         for _,c in ipairs(obj:GetChildren()) do collect(c) end
     end
     collect(root)
-    for _,t in ipairs(tweens) do t:Play() end
+    for _,t in ipairs(tweens) do pcall(function() t:Play() end) end
 end
 
--- Utility: tween Color3 for a BackgroundColor3 or similar
-local function TweenProperty(obj, prop, value, tinfo)
-    local ok, t = pcall(function()
-        return TweenService:Create(obj, tinfo or TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {[prop] = value})
+-- Dragging: top area height (px)
+local DRAG_TOP = 36
+
+-- Detect or create template
+local function getOrCreateTemplate()
+    -- Attempt to find an existing ScreenGui that matches your template (Window frame inside)
+    local screenGui = nil
+    for _,child in ipairs(playerGui:GetChildren()) do
+        if child:IsA("ScreenGui") and child:FindFirstChild("Window") then
+            screenGui = child
+            break
+        end
+    end
+    if not screenGui then
+        -- Build the exact template you provided (keeps naming identical)
+        screenGui = new("ScreenGui",{Parent = playerGui, Name = "ILO_UI_Template", ZIndexBehavior = Enum.ZIndexBehavior.Sibling, ResetOnSpawn = false})
+        -- Build Window
+        local Window = new("Frame", {Parent = screenGui, Name = "Window", BackgroundColor3 = Color3.fromRGB(21,21,21), BorderSizePixel=0, Size = UDim2.new(0,612,0,482), Position = UDim2.new(0.173,0,0.08346,0)})
+        -- SideBar
+        local SideBar = new("Frame",{Parent=Window, Name="SideBar", BackgroundColor3=Color3.fromRGB(43,43,43), BorderSizePixel=0, Size = UDim2.new(0,100,0,482), Position = UDim2.new(0,0,0,0)})
+        local CheatCover = new("ImageLabel",{Parent=SideBar, Name="CheatCover", Image="rbxassetid://76540169874404", BackgroundTransparency=1, Size=UDim2.new(0,83,0,91), Position=UDim2.new(0.08,0,0.04979,0)})
+        new("UIAspectRatioConstraint",{Parent=CheatCover})
+        -- Tabs
+        local names = {"HomeTab","LegitTab","RageTab","HvHTab","VisualsTab","MiscTab"}
+        local yPositions = {0.25726,0.3444,0.43154,0.51867,0.59959,0.68672}
+        for i,name in ipairs(names) do
+            local tb = new("TextButton",{Parent=SideBar, Name=name, TextColor3 = Color3.new(1,1,1), BackgroundTransparency = 1, Text = name:gsub("Tab",""), TextSize = 21, Size = UDim2.new(0,44,0,28)})
+            tb.Position = UDim2.new(0.27,0,yPositions[i],0)
+            tb.FontFace = Font.new([[rbxasset://fonts/families/SourceSansPro.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+        end
+        local ActiveTab = new("Frame",{Parent=SideBar, Name="ActiveTab", BackgroundColor3=Color3.fromRGB(15,102,166), Size=UDim2.new(0,44,0,2), Position = UDim2.new(0.28,0,0.31328,0)})
+        -- Section (left main)
+        local Section = new("Frame",{Parent=Window, Name="Section", BackgroundColor3=Color3.fromRGB(36,36,36), Size=UDim2.new(0,202,0,416), Position=UDim2.new(0.23039,0,0.09544,0)})
+        local SectionName = new("Frame",{Parent=Section, Name="SectionName", BackgroundColor3=Color3.fromRGB(15,102,166), Size=UDim2.new(0,202,0,30), Position=UDim2.new(0,0,-0.07212,0)})
+        new("TextLabel",{Parent=SectionName, Name="TextLabel", BackgroundTransparency=1, TextColor3=Color3.new(1,1,1), Text="Example", Size=UDim2.new(0,200,0,30), TextSize=14})
+        -- Example controls (same as your template)
+        new("TextButton",{Parent=Section, Name="ToggleButton", Size=UDim2.new(0,12,0,13), Position=UDim2.new(0.08416,0,0.04808,0), BackgroundColor3=Color3.fromRGB(43,43,43), Text=""})
+        new("UIAspectRatioConstraint",{Parent=Section.ToggleButton})
+        new("TextLabel",{Parent=Section.ToggleButton, Name="ToggleName", BackgroundTransparency=1, TextColor3=Color3.new(1,1,1), Text="Feature1", Position=UDim2.new(3.08333,0,-0.08333,0)})
+        local DropDownButton = new("TextButton",{Parent=Section, Name="DropDownButton", Size=UDim2.new(0,104,0,17), Position=UDim2.new(0.14356,0,0.14663,0), BackgroundColor3=Color3.fromRGB(43,43,43), Text=""})
+        new("TextLabel",{Parent=DropDownButton, Name="DropdownName", BackgroundTransparency=1, TextColor3=Color3.new(1,1,1), Text="Feature", Position=UDim2.new(0.16346,0,-0.90653,0)})
+        local DropDownFrame = new("Frame",{Parent=DropDownButton, Name="DropDownFrame", BackgroundColor3=Color3.fromRGB(43,43,43), Visible=false, Size=UDim2.new(0,104,0,69), Position=UDim2.new(0,0,1,0)})
+        for i,opt in ipairs({"option1","option2","option3","option4"}) do
+            new("TextButton",{Parent=DropDownFrame, Name="option"..i, Text=opt, Size=UDim2.new(0,104,0,17), Position = UDim2.new(0,0,(i-1)/4,0), BackgroundColor3=Color3.fromRGB(43,43,43), TextColor3 = Color3.new(1,1,1)})
+        end
+        local Button = new("TextButton",{Parent=Section, Name="Button", Size=UDim2.new(0,104,0,24), Position=UDim2.new(0.14356,0,0.23077,0), BackgroundColor3=Color3.fromRGB(43,43,43), TextColor3=Color3.fromRGB(15,102,166), FontFace = Font.new([[rbxasset://fonts/families/SourceSansPro.json]], Enum.FontWeight.Bold), Text="Feature"})
+        local Slider = new("Frame",{Parent=Section, Name="Slider", BackgroundColor3=Color3.fromRGB(43,43,43), Size=UDim2.new(0,137,0,9), Position=UDim2.new(0.14356,0,0.36779,0)})
+        local sliderKnob = new("TextButton",{Parent=Slider, Name="sliderKnob", Size=UDim2.new(0,7,0,21), Position=UDim2.new(-0.05109,0,-0.66667,0), BackgroundColor3=Color3.fromRGB(15,102,166)})
+        new("TextLabel",{Parent=Slider, Name="SliderValue", BackgroundTransparency=1, TextColor3=Color3.new(1,1,1), Text="0.0 %", Size=UDim2.new(0,33,0,12), Position=UDim2.new(0.75912,0,-2,0)})
+        -- Bind, ColorPicker placeholders
+        new("TextButton",{Parent=Section, Name="ColorPicker", Size=UDim2.new(0,39,0,18), Position=UDim2.new(0.10891,0,0.44712,0), BackgroundColor3=Color3.new(1,1,1)})
+        new("TextButton",{Parent=Section, Name="Bind", Size=UDim2.new(0,10,0,12), Position=UDim2.new(0.10891,0,0.6851,0), BackgroundColor3=Color3.fromRGB(43,43,43), Text="..."})
+        local BindOptions = new("Frame",{Parent=Section.Bind, Name="BindOptions", Visible=false, BackgroundColor3=Color3.fromRGB(43,43,43), Size=UDim2.new(0,85,0,54), Position=UDim2.new(1.6,0,-3.5,0)})
+        new("TextButton",{Parent=BindOptions, Name="Hold", BackgroundTransparency=1, Text="Hold", Size=UDim2.new(0,85,0,19)})
+        new("TextButton",{Parent=BindOptions, Name="Toggle", BackgroundTransparency=1, Text="Toggle", Size=UDim2.new(0,85,0,19), Position=UDim2.new(0,0,0.29057,0)})
+        new("TextButton",{Parent=BindOptions, Name="Always", BackgroundTransparency=1, Text="Always", Size=UDim2.new(0,85,0,19), Position=UDim2.new(0,0,0.64983,0)})
+        -- MultiSection
+        local MultiSection = new("Frame",{Parent=Window, Name="MultiSection", BackgroundColor3=Color3.fromRGB(36,36,36), Size=UDim2.new(0,202,0,416), Position=UDim2.new(0.61765,0,0.09544,0)})
+        new("TextButton",{Parent=MultiSection, Text="1", Size=UDim2.new(0,68,0,34), Position=UDim2.new(0.66337,0,-0.07212,0), BackgroundColor3=Color3.fromRGB(43,43,41), TextColor3=Color3.new(1,1,1)})
+        new("TextButton",{Parent=MultiSection, Text="2", Size=UDim2.new(0,68,0,34), Position=UDim2.new(0,0,-0.07212,0), BackgroundColor3=Color3.fromRGB(43,43,41), TextColor3=Color3.new(1,1,1)})
+        new("TextButton",{Parent=MultiSection, Text="3", Size=UDim2.new(0,68,0,34), Position=UDim2.new(0.32673,0,-0.07212,0), BackgroundColor3=Color3.fromRGB(43,43,41), TextColor3=Color3.new(1,1,1)})
+        new("Frame",{Parent=MultiSection, BackgroundColor3=Color3.fromRGB(15,102,166), Size=UDim2.new(0,202,0,2), Position=UDim2.new(0,0,0.00481,0)})
+    end
+
+    -- find the ScreenGui we will use (prefer one with a Window child)
+    local screenGui = nil
+    for _, child in ipairs(playerGui:GetChildren()) do
+        if child:IsA("ScreenGui") and child:FindFirstChild("Window") then
+            screenGui = child
+            break
+        end
+    end
+    if not screenGui then
+        -- maybe the function above created one; search again
+        for _, child in ipairs(playerGui:GetChildren()) do
+            if child:IsA("ScreenGui") and child:FindFirstChild("Window") then
+                screenGui = child
+                break
+            end
+        end
+    end
+    return screenGui
+end
+
+local ScreenGui = getOrCreateTemplate()
+local Window = ScreenGui:FindFirstChild("Window")
+assert(Window, "Window frame not found or failed to create template")
+
+-- store state
+local ILO = {}
+ILO._tabs = {}
+ILO._sections = {}
+ILO._theme = DEFAULT_THEME
+ILO._open = true -- start open
+ILO._toggles = {}
+ILO._sliders = {}
+ILO._dropdowns = {}
+ILO._binds = {}
+ILO._colorpickers = {}
+ILO._configDropdown = nil
+
+-- Helper: get child by name safely
+local function childOf(parent, name)
+    if not parent then return nil end
+    local c = parent:FindFirstChild(name)
+    return c
+end
+
+-- DRAGGING implementation (drag top DRAG_TOP px of Window)
+do
+    local dragging, dragStart, startPos
+    Window.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local y = input.Position.Y - Window.AbsolutePosition.Y
+            if y <= DRAG_TOP then
+                dragging = true
+                dragStart = input.Position
+                startPos = Window.Position
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then dragging = false end
+                end)
+            end
+        end
     end)
-    if ok and t then t:Play() end
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            local newX = startPos.X.Scale + (startPos.X.Offset + delta.X - startPos.X.Offset) / math.max(1, Window.Parent.AbsoluteSize.X)
+            local newY = startPos.Y.Scale + (startPos.Y.Offset + delta.Y - startPos.Y.Offset) / math.max(1, Window.Parent.AbsoluteSize.Y)
+            -- preserve pixel offsets relative to screen size (use AbsoluteOffset approach)
+            local newPos = UDim2.new(0, startPos.X.Offset + delta.X, 0, startPos.Y.Offset + delta.Y)
+            Window.Position = newPos
+        end
+    end)
 end
 
--- Color picker modal (simple)
-local function CreateColorPicker(parent)
-    local modal = new("Frame", {
-        Parent = parent,
-        Size = UDim2.new(0, 360, 0, 240),
-        AnchorPoint = Vector2.new(0.5,0.5),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
-        BackgroundColor3 = Color3.fromRGB(43,43,43),
-        BorderSizePixel = 1,
-        Visible = false,
-        ZIndex = 500
-    })
-    modal.Name = "ILOColorPicker"
+-- Fade functions (open/close)
+function ILO:FadeOpen()
+    self._open = true
+    Window.Visible = true
+    deepTweenTransparency(Window, 0, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
+end
+function ILO:FadeClose()
+    self._open = false
+    deepTweenTransparency(Window, 1, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In))
+    delay(0.2, function() pcall(function() Window.Visible = false end) end)
+end
+function ILO:Toggle()
+    if self._open then self:FadeClose() else self:FadeOpen() end
+end
 
-    local title = new("TextLabel", {Parent = modal, Size = UDim2.new(1,0,0,26), Position = UDim2.new(0,0,0,0), BackgroundTransparency = 1, Text = "Color Picker", TextColor3 = Color3.new(1,1,1), TextSize = 16, Font = Enum.Font.SourceSansBold})
+-- default key: Delete
+do
+    local toggleKey = Enum.KeyCode.Delete
+    UserInputService.InputBegan:Connect(function(input, gpe)
+        if gpe then return end
+        if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == toggleKey then
+            ILO:Toggle()
+        end
+    end)
+end
 
-    -- simple hue bar + sv box approach
-    local svBox = new("Frame", {Parent = modal, Size = UDim2.new(0,200,0,160), Position = UDim2.new(0,10,0,36), BackgroundColor3 = Color3.new(1,0,0), BorderSizePixel = 1})
-    local hueBar = new("Frame", {Parent = modal, Size = UDim2.new(0,20,0,160), Position = UDim2.new(0,220,0,36), BorderSizePixel = 1})
-    local hueGrad = Instance.new("UIGradient", hueBar)
+-- ActiveTab movement (uses template ActiveTab)
+local ActiveTab = childOf(Window:FindFirstChild("SideBar"), "ActiveTab")
+
+-- map existing side bar tab buttons into ILO._tabs
+do
+    local sideBar = Window:FindFirstChild("SideBar")
+    if sideBar then
+        for _, child in ipairs(sideBar:GetChildren()) do
+            if child:IsA("TextButton") and child.Name:match("Tab$") then
+                -- create a tab object that shows/hides the Section frame contents
+                local tabName = child.Name
+                local human = child.Text ~= "" and child.Text or tabName:gsub("Tab","")
+                local tab = {Name = human, Button = child}
+                -- when clicked, hide other Sections and show the Section frame
+                child.MouseButton1Click:Connect(function()
+                    -- move ActiveTab under this button
+                    if ActiveTab then
+                        ActiveTab.Position = UDim2.new(child.Position.X.Scale, child.Position.X.Offset, child.Position.Y.Scale + child.Size.Y.Scale - 0.02, child.Position.Y.Offset)
+                        ActiveTab.Size = UDim2.new(child.Size.X.Scale, child.Size.X.Offset, 0, 2)
+                    end
+                    -- show/hide Sections: if you have per-tab sections we would show them. For now, we'll show the left Section and MultiSection as needed
+                    -- Keep behaviour minimal: show Section by default
+                    local Section = Window:FindFirstChild("Section")
+                    if Section then Section.Visible = true end
+                    local Multi = Window:FindFirstChild("MultiSection")
+                    if Multi then Multi.Visible = true end
+                end)
+                table.insert(ILO._tabs, tab)
+            end
+        end
+    end
+    -- ensure ActiveTab starts under first tab if present
+    if ActiveTab and #ILO._tabs > 0 then
+        local b = ILO._tabs[1].Button
+        ActiveTab.Position = UDim2.new(b.Position.X.Scale, b.Position.X.Offset, b.Position.Y.Scale + b.Size.Y.Scale - 0.02, b.Position.Y.Offset)
+        ActiveTab.Size = UDim2.new(b.Size.X.Scale, b.Size.X.Offset, 0, 2)
+    end
+end
+
+-- Color picker (modal) that uses your ScreenGui as parent (reuses template ColorPicker as base if needed)
+local function CreateColorPickerModal()
+    -- We'll create a single modal and reuse it
+    local modal = ScreenGui:FindFirstChild("ILO_ColorModal")
+    if modal then return modal end
+    modal = new("Frame", {Parent = ScreenGui, Name = "ILO_ColorModal", Size = UDim2.new(0,360,0,240), AnchorPoint = Vector2.new(0.5,0.5), Position = UDim2.new(0.5,0,0.5,0), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1, Visible = false, ZIndex = 1000})
+    new("TextLabel", {Parent = modal, Text = "Color Picker", Size = UDim2.new(1,0,0,26), BackgroundTransparency = 1, TextColor3 = Color3.new(1,1,1)})
+    -- SV box and hue bar
+    local sv = new("Frame",{Parent=modal, Size=UDim2.new(0,200,0,160), Position=UDim2.new(0,10,0,36), BackgroundColor3 = Color3.new(1,0,0)})
+    local hue = new("Frame",{Parent=modal, Size=UDim2.new(0,20,0,160), Position=UDim2.new(0,220,0,36)})
+    local hueGrad = Instance.new("UIGradient", hue)
     hueGrad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromHSV(0,1,1)),
         ColorSequenceKeypoint.new(0.17, Color3.fromHSV(60/360,1,1)),
@@ -164,605 +319,326 @@ local function CreateColorPicker(parent)
         ColorSequenceKeypoint.new(0.5, Color3.fromHSV(180/360,1,1)),
         ColorSequenceKeypoint.new(0.67, Color3.fromHSV(240/360,1,1)),
         ColorSequenceKeypoint.new(0.83, Color3.fromHSV(300/360,1,1)),
-        ColorSequenceKeypoint.new(1, Color3.fromHSV(360/360,1,1))
+        ColorSequenceKeypoint.new(1, Color3.fromHSV(360/360,1,1)),
     })
-    hueGrad.Rotation = 0
-
-    local preview = new("Frame", {Parent = modal, Size = UDim2.new(0,100,0,40), Position = UDim2.new(0,10,0,200-40), BackgroundColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
-    local rgbBox = new("TextBox", {Parent = modal, Size = UDim2.new(0,200,0,22), Position = UDim2.new(0,10,0,200-18), Text = "255 165 0", ClearTextOnFocus = false, BackgroundColor3 = Color3.new(1,1,1), TextColor3 = Color3.new(0,0,0), BorderSizePixel = 1})
-
-    local btnSelect = new("TextButton", {Parent = modal, Size = UDim2.new(0,70,0,26), Position = UDim2.new(1,-80,0,200-18), Text = "Select", BackgroundColor3 = THEME, TextColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
-    local btnCancel = new("TextButton", {Parent = modal, Size = UDim2.new(0,70,0,26), Position = UDim2.new(1,-160,0,200-18), Text = "Cancel", BackgroundColor3 = Color3.fromRGB(60,60,60), TextColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
-
-    -- internal state
-    local hue = 0
-    local sat, val = 1, 1
-
+    local preview = new("Frame",{Parent=modal, Size=UDim2.new(0,100,0,40), Position=UDim2.new(0,10,0,200-40), BackgroundColor3=Color3.new(1,1,1)})
+    local rgbBox = new("TextBox",{Parent=modal, Size=UDim2.new(0,200,0,22), Position=UDim2.new(0,10,0,200-18), Text="255 165 0", ClearTextOnFocus=false, BackgroundColor3=Color3.new(1,1,1), TextColor3=Color3.new(0,0,0)})
+    local btnSelect = new("TextButton",{Parent=modal, Size=UDim2.new(0,70,0,26), Position=UDim2.new(1,-80,0,200-18), Text="Select", BackgroundColor3=THEME, TextColor3=Color3.new(1,1,1)})
+    local btnCancel = new("TextButton",{Parent=modal, Size=UDim2.new(0,70,0,26), Position=UDim2.new(1,-160,0,200-18), Text="Cancel", BackgroundColor3=Color3.fromRGB(60,60,60), TextColor3=Color3.new(1,1,1)})
+    -- state
+    local h = 0; local s = 1; local v = 1
     local function updatePreview()
-        local c = Color3.fromHSV(hue, sat, val)
+        local c = Color3.fromHSV(h,s,v)
         preview.BackgroundColor3 = c
         rgbBox.Text = string.format("%d %d %d", math.floor(c.R*255+0.5), math.floor(c.G*255+0.5), math.floor(c.B*255+0.5))
     end
     updatePreview()
-
-    -- simple clicking on hueBar sets hue
-    local editingHue = false
-    local editingSV = false
-
-    hueBar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            editingHue = true
-            local y = clamp((input.Position.Y - hueBar.AbsolutePosition.Y)/hueBar.AbsoluteSize.Y, 0, 1)
-            hue = 1 - y
+    -- simple pointer handling
+    local editingHue, editingSV = false, false
+    hue.InputBegan:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseButton1 then editingHue = true end end)
+    hue.InputEnded:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseButton1 then editingHue = false end end)
+    sv.InputBegan:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseButton1 then editingSV = true end end)
+    sv.InputEnded:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseButton1 then editingSV = false end end)
+    UserInputService.InputChanged:Connect(function(inp)
+        if editingHue and inp.UserInputType==Enum.UserInputType.MouseMovement then
+            local mouse = UserInputService:GetMouseLocation()
+            local rel = clamp((mouse.Y - hue.AbsolutePosition.Y)/hue.AbsoluteSize.Y, 0, 1)
+            h = 1 - rel
+            updatePreview()
+        end
+        if editingSV and inp.UserInputType==Enum.UserInputType.MouseMovement then
+            local mouse = UserInputService:GetMouseLocation()
+            local rx = clamp((mouse.X - sv.AbsolutePosition.X)/sv.AbsoluteSize.X, 0, 1)
+            local ry = clamp((mouse.Y - sv.AbsolutePosition.Y)/sv.AbsoluteSize.Y, 0, 1)
+            s = rx; v = 1 - ry
             updatePreview()
         end
     end)
-    hueBar.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then editingHue = false end
-    end)
-    svBox.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            editingSV = true
-            local x = clamp((input.Position.X - svBox.AbsolutePosition.X)/svBox.AbsoluteSize.X, 0, 1)
-            local y = clamp((input.Position.Y - svBox.AbsolutePosition.Y)/svBox.AbsoluteSize.Y, 0, 1)
-            sat = x
-            val = 1 - y
-            updatePreview()
-        end
-    end)
-    svBox.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then editingSV = false end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if editingHue and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local abs = UserInputService:GetMouseLocation()
-            local y = clamp((abs.Y - hueBar.AbsolutePosition.Y)/hueBar.AbsoluteSize.Y, 0, 1)
-            hue = 1 - y
-            updatePreview()
-        end
-        if editingSV and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local abs = UserInputService:GetMouseLocation()
-            local x = clamp((abs.X - svBox.AbsolutePosition.X)/svBox.AbsoluteSize.X, 0, 1)
-            local y = clamp((abs.Y - svBox.AbsolutePosition.Y)/svBox.AbsoluteSize.Y, 0, 1)
-            sat = x
-            val = 1 - y
-            updatePreview()
-        end
-    end)
-
-    rgbBox.FocusLost:Connect(function(enter)
-        local s = rgbBox.Text
-        local r,g,b = s:match("(%d+)%s+(%d+)%s+(%d+)")
+    rgbBox.FocusLost:Connect(function()
+        local r,g,b = rgbBox.Text:match("(%d+)%s+(%d+)%s+(%d+)")
         if r and g and b then
             local c = Color3.fromRGB(clamp(tonumber(r),0,255), clamp(tonumber(g),0,255), clamp(tonumber(b),0,255))
-            hue, sat, val = Color3.toHSV(c)
+            h,s,v = Color3.toHSV(c)
             updatePreview()
         end
     end)
-
-    return {
-        Frame = modal,
-        Open = function(initial)
-            if initial then
-                local h,s,v = Color3.toHSV(initial)
-                hue, sat, val = h, s, v
-            end
+    -- API
+    local API = {}
+    function API:Open(initial)
+        if initial then
+            h,s,v = Color3.toHSV(initial)
             updatePreview()
-            modal.Visible = true
-            modal.ZIndex = 500
-        end,
-        Close = function() modal.Visible = false end,
-        Get = function() return preview.BackgroundColor3 end,
-        SelectButton = btnSelect,
-        CancelButton = btnCancel,
-        RGBBox = rgbBox
+        end
+        modal.Visible = true
+        modal.ZIndex = 1000
+    end
+    function API:Close() modal.Visible = false end
+    function API:GetColor() return preview.BackgroundColor3 end
+    API.SelectButton = btnSelect
+    API.CancelButton = btnCancel
+    return API
+end
+
+-- Toggle, Slider, Dropdown creation functions that add controls into Section frame
+local SectionFrame = Window:FindFirstChild("Section")
+local MultiSection = Window:FindFirstChild("MultiSection")
+
+-- Keep list of added items (for config snapshot)
+local addedControls = {}
+
+-- Create Toggle (preserves visuals from template)
+local function CreateToggle(labelText, opts)
+    opts = opts or {}
+    local parent = SectionFrame
+    local holder = new("TextButton",{Parent=parent, Size=UDim2.new(1,-16,0,22), BackgroundColor3=Color3.fromRGB(43,43,43), BorderSizePixel=1, Text=""})
+    local nameLabel = new("TextLabel",{Parent=holder, Text=labelText, BackgroundTransparency=1, Position=UDim2.new(0.08,0,0,0), Size=UDim2.new(0.7,0,1,0), TextColor3=Color3.new(1,1,1), TextSize=17})
+    local switch = new("Frame",{Parent=holder, Size=UDim2.new(0,12,0,13), Position=UDim2.new(0.02,0,0.12,0), BackgroundColor3=Color3.fromRGB(43,43,43), BorderSizePixel=1})
+    local switchFill = new("Frame",{Parent=switch, Size=UDim2.new(0,10,0,11), BackgroundColor3=Color3.new(1,1,1)})
+    local colorBtn, bindBtn
+    if opts.ColorPicker then
+        colorBtn = new("TextButton",{Parent=holder, Size=UDim2.new(0,36,0,18), Position=UDim2.new(1,-42,0.12,0), BackgroundColor3=opts.Color or Color3.new(1,1,1)})
+    end
+    if opts.Bind then
+        bindBtn = new("TextButton",{Parent=holder, Size=UDim2.new(0,26,0,18), Position=UDim2.new(1,-84,0.12,0), Text="...", BackgroundColor3=Color3.fromRGB(43,43,43), TextColor3=Color3.new(1,1,1)})
+    end
+
+    local state = opts.Default or false
+    local cb = opts.Callback
+    local assignedBind = nil
+    local assignedColor = opts.Color or Color3.new(1,1,1)
+
+    local function refresh()
+        if state then
+            switchFill.BackgroundColor3 = THEME
+        else
+            switchFill.BackgroundColor3 = Color3.new(1,1,1)
+        end
+        if colorBtn then colorBtn.BackgroundColor3 = assignedColor end
+        if bindBtn then bindBtn.TextColor3 = Color3.new(1,1,1) end
+    end
+    holder.MouseButton1Click:Connect(function()
+        state = not state
+        pcall(cb, state)
+        refresh()
+    end)
+
+    -- color picker
+    if colorBtn then
+        local cp = CreateColorPickerModal()
+        cp.SelectButton.MouseButton1Click:Connect(function()
+            local c = cp:GetColor()
+            assignedColor = c
+            cp:Close()
+            refresh()
+        end)
+        cp.CancelButton.MouseButton1Click:Connect(function() cp:Close() end)
+        colorBtn.MouseButton1Click:Connect(function() cp:Open(assignedColor) end)
+        colorBtn.BackgroundColor3 = assignedColor
+    end
+
+    -- bind capture
+    if bindBtn then
+        local capturing = false
+        bindBtn.MouseButton1Click:Connect(function()
+            capturing = true
+            bindBtn.Text = "..."
+            local conn
+            conn = UserInputService.InputBegan:Connect(function(input, gpe)
+                if gpe then return end
+                if capturing then
+                    assignedBind = input
+                    bindBtn.Text = assignedBind.KeyCode and tostring(assignedBind.KeyCode) or tostring(assignedBind.UserInputType)
+                    capturing = false
+                    conn:Disconnect()
+                end
+            end)
+        end)
+        -- toggle with assignedBind
+        UserInputService.InputBegan:Connect(function(input, gpe)
+            if gpe then return end
+            if assignedBind and input.UserInputType == assignedBind.UserInputType and ((assignedBind.KeyCode and input.KeyCode == assignedBind.KeyCode) or (assignedBind.UserInputType == input.UserInputType and not assignedBind.KeyCode)) then
+                state = not state
+                pcall(cb, state)
+                refresh()
+            end
+        end)
+    end
+
+    refresh()
+    table.insert(addedControls, {type="toggle", get=function() return state end, set=function(v) state = not not v; refresh() end})
+    return {
+        Get = function() return state end,
+        Set = function(v) state = not not v; refresh() end,
+        SetColor = function(c) assignedColor = c; refresh() end,
+        SetBind = function(b) assignedBind = b; refresh() end,
+        UI = holder
     }
 end
 
--- Config system
-local CFG_ROOT = "ILO"
-local CFG_FOLDER = CFG_ROOT.."/cfgs"
+-- Create Button
+local function CreateButton(text, callback)
+    local parent = SectionFrame
+    local btn = new("TextButton",{Parent=parent, Text=text, Size=UDim2.new(0,104,0,24), Position=UDim2.new(0.14356,0,0.23077,0), BackgroundColor3=Color3.fromRGB(43,43,43), TextColor3=Color3.fromRGB(15,102,166), Font = Enum.Font.SourceSansBold, TextSize = 14})
+    btn.MouseButton1Click:Connect(function()
+        pcall(callback)
+    end)
+    table.insert(addedControls, {type="button", ui=btn})
+    return btn
+end
 
+-- Create Slider (replicates template structure)
+local function CreateSlider(minVal, maxVal, defaultVal, callback)
+    minVal = minVal or 0; maxVal = maxVal or 100; defaultVal = defaultVal or minVal
+    local parent = SectionFrame
+    local frame = new("Frame",{Parent=parent, Size=UDim2.new(0,137,0,28), BackgroundColor3=Color3.fromRGB(43,43,43), BorderSizePixel=1, Position=UDim2.new(0.14356,0,0.36779,0)})
+    local knob = new("TextButton",{Parent=frame, Name="sliderKnob", Size=UDim2.new(0,7,0,21), Position=UDim2.new(-0.05109,0,-0.66667,0), BackgroundColor3=THEME, BorderSizePixel=0, Text=""})
+    local valLabel = new("TextLabel",{Parent=frame, Name="SliderValue", BackgroundTransparency=1, TextColor3=Color3.new(1,1,1), Text= tostring(defaultVal), Size=UDim2.new(0,33,0,12), Position=UDim2.new(0.75912,0,-2,0)})
+    local dragging = false
+    knob.MouseButton1Down:Connect(function() dragging = true end)
+    UserInputService.InputEnded:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end end)
+    UserInputService.InputChanged:Connect(function(inp)
+        if dragging and inp.UserInputType==Enum.UserInputType.MouseMovement then
+            local abs = UserInputService:GetMouseLocation()
+            local pos = frame.AbsolutePosition
+            local size = frame.AbsoluteSize
+            local x = clamp((abs.X - pos.X)/size.X, 0, 1)
+            knob.Position = UDim2.new(x, -4, -0.66667, 0)
+            local value = minVal + (maxVal-minVal)*x
+            valLabel.Text = string.format("%.2f", value)
+            pcall(callback, value)
+        end
+    end)
+    table.insert(addedControls, {type="slider", get=function() return tonumber(valLabel.Text) end, set=function(v) valLabel.Text = tostring(v) end})
+    return {Get=function() return tonumber(valLabel.Text) end, Set=function(v) valLabel.Text = tostring(v) end, UI = frame}
+end
+
+-- Create Dropdown (uses template DropDownButton structure)
+local function CreateDropdown(opts)
+    opts = opts or {}
+    local parent = SectionFrame
+    local button = new("TextButton",{Parent=parent, Size=UDim2.new(0,104,0,17), Position=UDim2.new(0.14356,0,0.14663,0), BackgroundColor3=Color3.fromRGB(43,43,43), Text=""})
+    local nameLbl = new("TextLabel",{Parent=button, Text=opts.Label or "Dropdown", BackgroundTransparency=1, Position=UDim2.new(0.02,0,0,0), Size=UDim2.new(0.6,0,1,0), TextColor3=Color3.new(1,1,1)})
+    local selected = new("TextLabel",{Parent=button, Text=opts.Options and opts.Options[1] or "", BackgroundTransparency=1, Position=UDim2.new(0.6,6,0,0), Size=UDim2.new(0.35,-40,1,0), TextColor3=Color3.new(1,1,1)})
+    local arrow = new("TextLabel",{Parent=button, Text="▼", Size=UDim2.new(0,24,1,0), Position=UDim2.new(1,-28,0,0), BackgroundTransparency=1, TextColor3=Color3.new(1,1,1)})
+    local dropdown = new("Frame",{Parent=button, BackgroundColor3=Color3.fromRGB(43,43,43), Size=UDim2.new(1,0,0,#(opts.Options or {})*18), Position=UDim2.new(0,0,1,0), Visible=false, BorderSizePixel=1})
+    for i,opt in ipairs(opts.Options or {}) do
+        local btn = new("TextButton",{Parent=dropdown, Text=opt, TextColor3=Color3.new(1,1,1), Size=UDim2.new(1,0,0,18), Position=UDim2.new(0,0,(i-1)*18,0), BackgroundColor3=Color3.fromRGB(43,43,43)})
+        btn.MouseButton1Click:Connect(function()
+            selected.Text = opt
+            dropdown.Visible = false
+            if opts.Callback then pcall(opts.Callback, opt) end
+        end)
+    end
+    button.MouseButton1Click:Connect(function() dropdown.Visible = not dropdown.Visible end)
+    table.insert(addedControls, {type="dropdown", get=function() return selected.Text end, set=function(v) selected.Text = v end})
+    return {Get=function() return selected.Text end, Set=function(v) selected.Text = v end, UI = button}
+end
+
+-- Config system (saves a simple snapshot in order of addedControls)
 local function ensure_cfg_fs()
     safe_makefolder(CFG_ROOT)
     safe_makefolder(CFG_FOLDER)
 end
-
 local function list_cfg_files()
     ensure_cfg_fs()
-    local files = {}
-    if listfiles then
-        local ok, data = pcall(function() return listfiles(CFG_FOLDER) end)
-        if ok and type(data) == "table" then
-            for _,f in ipairs(data) do
-                if f:match("%.ilo$") then
-                    local name = f:match("([^/\\]+)%.ilo$")
-                    table.insert(files, name)
-                end
-            end
-            return files
+    local files = safe_listfiles(CFG_FOLDER)
+    local out = {}
+    for _,f in ipairs(files) do
+        if f:match("%.ilo$") then
+            local name = f:match("([^/\\]+)%.ilo$")
+            table.insert(out, name)
         end
     end
-    -- fallback: no reliable list -> attempt to look for common names? return empty
-    return files
+    return out
 end
-
-local function save_config(name, tbl)
+local function save_cfg(name, tbl)
     ensure_cfg_fs()
     local path = CFG_FOLDER.."/"..name..".ilo"
-    local ok, data = pcall(function() return HttpService:JSONEncode(tbl) end)
+    local ok, raw = pcall(function() return HttpService:JSONEncode(tbl) end)
     if ok then
-        return safe_writefile(path, data)
+        return safe_writefile(path, raw)
     end
     return false
 end
-
-local function load_config(name)
-    ensure_cfg_fs()
+local function load_cfg(name)
     local path = CFG_FOLDER.."/"..name..".ilo"
-    local contents = safe_readfile(path)
-    if contents then
-        local ok, tbl = pcall(function() return HttpService:JSONDecode(contents) end)
+    local raw = safe_readfile(path)
+    if raw then
+        local ok, tbl = pcall(function() return HttpService:JSONDecode(raw) end)
         if ok then return tbl end
     end
     return nil
 end
 
--- Library core
-function ILO.CreateWindow(opts)
-    opts = opts or {}
-    local rootName = opts.Name or "ILO_UI"
-    -- create ScreenGui or use existing
-    local screenGui = playerGui:FindFirstChild(rootName)
-    if not screenGui then
-        screenGui = new("ScreenGui", {Parent = playerGui})
-        screenGui.Name = rootName
-        screenGui.ResetOnSpawn = false
+-- Exposed API to build UI using this template
+local API = {}
+
+function API:SetTheme(c)
+    THEME = c or DEFAULT_THEME
+    -- only apply to known theme elements: ActiveTab and SectionName backgrounds and slider knob default for new sliders
+    local side = Window:FindFirstChild("SideBar")
+    if side and side:FindFirstChild("ActiveTab") then
+        side.ActiveTab.BackgroundColor3 = THEME
     end
-
-    -- Window frame (use your template frame if provided)
-    local window = screenGui:FindFirstChild("Window")
-    if not window then
-        window = new("Frame", {
-            Parent = screenGui,
-            Name = "Window",
-            Size = UDim2.new(0,612,0,482),
-            Position = UDim2.new(0.173,0,0.08346,0),
-            BackgroundColor3 = Color3.fromRGB(21,21,21),
-            BorderSizePixel = 1,
-        })
+    local section = Window:FindFirstChild("Section")
+    if section and section:FindFirstChild("SectionName") then
+        pcall(function() section.SectionName.BackgroundColor3 = THEME end)
     end
-
-    -- Sidebar
-    local sideBar = window:FindFirstChild("SideBar")
-    if not sideBar then
-        sideBar = new("Frame", {Parent = window, Name = "SideBar", Size = UDim2.new(0,100,1,0), Position = UDim2.new(0,0,0,0), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1})
-    end
-
-    local activeTabBar = sideBar:FindFirstChild("ActiveTab")
-    if not activeTabBar then
-        activeTabBar = new("Frame", {Parent = sideBar, Name = "ActiveTab", Size = UDim2.new(0,44,0,2), BackgroundColor3 = THEME, BorderSizePixel = 0})
-    end
-
-    local contentRoot = window:FindFirstChild("ContentRoot")
-    if not contentRoot then
-        contentRoot = new("Frame", {Parent = window, Name = "ContentRoot", Size = UDim2.new(1, -100, 1, 0), Position = UDim2.new(0.2, 0, 0, 0), BackgroundTransparency = 1})
-        contentRoot.ClipsDescendants = true
-    end
-
-    local lib = setmetatable({}, ILO)
-    lib.ScreenGui = screenGui
-    lib.Window = window
-    lib.SideBar = sideBar
-    lib.ActiveTabBar = activeTabBar
-    lib.ContentRoot = contentRoot
-    lib._tabs = {}
-    lib._theme = THEME
-    lib._open = false
-    lib._toggles = {} -- for saving state
-    lib._sliders = {}
-    lib._dropdowns = {}
-    lib._binds = {}
-    lib._colorpickers = {}
-    lib._configDropdown = nil
-
-    -- Theme function
-    function lib:SetTheme(color3)
-        self._theme = color3 or DEFAULT_THEME
-        THEME = self._theme
-        if self.ActiveTabBar then self.ActiveTabBar.BackgroundColor3 = self._theme end
-    end
-
-    -- Fade open/close (affects all descendants)
-    function lib:SetOpen(state)
-        state = not not state
-        if state == self._open then return end
-        self._open = state
-        if state then
-            self.ScreenGui.Enabled = true
-            -- set low transparencies then tween into view (target = 0 for transparency props)
-            deepTweenGuiTransparency(self.Window, 0, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
-            -- optional scale/position animation:
-            TweenService:Create(self.Window, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = self.Window.Position}):Play()
-            self.Window.Visible = true
-        else
-            -- tween to hidden (transparency 1)
-            deepTweenGuiTransparency(self.Window, 1, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In))
-            delay(0.25, function() -- hide after tween
-                pcall(function() self.Window.Visible = false end)
-            end)
-        end
-    end
-
-    -- default bind: Delete key
-    local toggleKey = Enum.KeyCode.Delete
-    UserInputService.InputBegan:Connect(function(input, gpe)
-        if gpe then return end
-        if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == toggleKey then
-            lib:SetOpen(not lib._open)
-        end
-    end)
-
-    -- Create tab
-    function lib:CreateTab(name)
-        local tabBtn = new("TextButton", {Parent = self.SideBar, Text = name, Size = UDim2.new(0,44,0,28), BackgroundTransparency = 1, TextSize = 21, TextColor3 = Color3.new(1,1,1), BorderSizePixel = 0})
-        local index = #self._tabs + 1
-        local y = 0.25 + (index-1) * 0.087
-        tabBtn.Position = UDim2.new(0.27, 0, y, 0)
-
-        local contentFrame = new("Frame", {Parent = self.ContentRoot, Size = UDim2.new(0,400,0,416), Position = UDim2.new(0.02 + ((index-1)*0.01), 0, 0.09544, 0), BackgroundColor3 = Color3.fromRGB(36,36,36), Visible = (#self._tabs==0)})
-        contentFrame.ClipsDescendants = true
-
-        local tab = {Name = name, Button = tabBtn, Frame = contentFrame, Sections = {}}
-        function tab:SetActive()
-            for _,t in ipairs(self._owner._tabs) do
-                t.Frame.Visible = false
-            end
-            self.Frame.Visible = true
-            -- move active bar
-            self._owner.ActiveTabBar.Position = UDim2.new(self.Button.Position.X.Scale, self.Button.Position.X.Offset, self.Button.Position.Y.Scale + self.Button.Size.Y.Scale - 0.02, self.Button.Position.Y.Offset)
-            self._owner.ActiveTabBar.Size = UDim2.new(self.Button.Size.X.Scale, self.Button.Size.X.Offset, 0,2)
-            self._owner.ActiveTabBar.BackgroundColor3 = self._owner._theme
-        end
-
-        tab._owner = self
-        tab.Button.MouseButton1Click:Connect(function()
-            tab:SetActive()
-        end)
-
-        -- Section creator
-        function tab:CreateSection(title)
-            local secFrame = new("Frame", {Parent = self.Frame, Size = UDim2.new(0,202,0,416), Position = UDim2.new(0,0,0,0), BackgroundColor3 = Color3.fromRGB(36,36,36), BorderSizePixel = 1})
-            local nameBar = new("Frame", {Parent = secFrame, Size = UDim2.new(1,0,0,30), Position = UDim2.new(0,0,-0.07212,0), BackgroundColor3 = self._owner._theme, BorderSizePixel = 1})
-            local text = new("TextLabel", {Parent = nameBar, Text = title, BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0), TextColor3 = Color3.new(1,1,1), TextSize = 14})
-            secFrame.Layout = Instance.new("UIListLayout", secFrame)
-            secFrame.Layout.Padding = UDim.new(0,6)
-            secFrame.Layout.VerticalAlignment = Enum.VerticalAlignment.Top
-            secFrame.Layout.SortOrder = Enum.SortOrder.LayoutOrder
-
-            local section = {Frame = secFrame, Items = {}}
-
-            -- Toggle
-            function section:CreateToggle(label, options)
-                options = options or {}
-                local btn = new("TextButton", {Parent = secFrame, Size = UDim2.new(1,-20,0,22), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1, Text = ""})
-                local lbl = new("TextLabel", {Parent = btn, Text = label, BackgroundTransparency = 1, Position = UDim2.new(0.08,0,0,0), Size = UDim2.new(0.7,0,1,0), TextColor3 = Color3.new(1,1,1), TextSize = 17})
-                local switch = new("Frame", {Parent = btn, Size = UDim2.new(0,12,0,13), Position = UDim2.new(0.02,0,0.12,0), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1})
-                local switchFill = new("Frame", {Parent = switch, Size = UDim2.new(0,10,0,11), Position = UDim2.new(0,0,0,0), BackgroundColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
-
-                local colorBtn, bindBtn
-                if options.ColorPicker then
-                    colorBtn = new("TextButton", {Parent = btn, Size = UDim2.new(0,36,0,18), Position = UDim2.new(1,-42,0.12,0), Text = "", BackgroundColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
-                end
-                if options.Bind then
-                    bindBtn = new("TextButton", {Parent = btn, Size = UDim2.new(0,26,0,18), Position = UDim2.new(1,-84,0.12,0), Text = "...", BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1, TextColor3 = Color3.new(1,1,1)})
-                end
-
-                local enabled = options.Default or false
-                local cb = options.Callback
-                local assignedBind = nil
-                local assignedColor = options.Color or Color3.fromRGB(255,255,255)
-
-                local function refresh()
-                    if enabled then
-                        switchFill.BackgroundColor3 = self._owner._theme
-                    else
-                        switchFill.BackgroundColor3 = Color3.fromRGB(255,255,255)
-                    end
-                    if colorBtn then colorBtn.BackgroundColor3 = assignedColor end
-                    if bindBtn then bindBtn.Text = assignedBind and tostring(assignedBind.KeyCode) or "..." end
-                end
-
-                btn.MouseButton1Click:Connect(function()
-                    enabled = not enabled
-                    pcall(cb, enabled)
-                    refresh()
-                end)
-
-                -- Color picker
-                local cpAPI
-                if colorBtn then
-                    local cp = CreateColorPicker(self._owner.ScreenGui)
-                    cpAPI = cp
-                    cp.SelectButton.MouseButton1Click:Connect(function()
-                        assignedColor = cp.Get(cp)
-                        cp.Close(cp)
-                        refresh()
-                    end)
-                    cp.CancelButton.MouseButton1Click:Connect(function() cp.Close(cp) end)
-                    colorBtn.MouseButton1Click:Connect(function() cp.Open(cp, assignedColor) end)
-                    colorBtn.BackgroundColor3 = assignedColor
-                end
-
-                -- Bind capture
-                if bindBtn then
-                    local capturing = false
-                    bindBtn.MouseButton1Click:Connect(function()
-                        capturing = true
-                        bindBtn.Text = "..."
-                        local conn
-                        conn = UserInputService.InputBegan:Connect(function(input, gpe)
-                            if capturing then
-                                assignedBind = input
-                                bindBtn.Text = assignedBind.KeyCode and tostring(assignedBind.KeyCode) or tostring(assignedBind.UserInputType)
-                                capturing = false
-                                conn:Disconnect()
-                            end
-                        end)
-                    end)
-                end
-
-                -- global to toggle by keybind if set
-                UserInputService.InputBegan:Connect(function(input, gpe)
-                    if gpe then return end
-                    if assignedBind and input.UserInputType == assignedBind.UserInputType and ((assignedBind.KeyCode and input.KeyCode == assignedBind.KeyCode) or (assignedBind.UserInputType == input.UserInputType and not assignedBind.KeyCode)) then
-                        enabled = not enabled
-                        pcall(cb, enabled)
-                        refresh()
-                    end
-                end)
-
-                refresh()
-                local obj = {
-                    Get = function() return enabled end,
-                    Set = function(val) enabled = not not val; refresh(); pcall(cb, enabled) end,
-                    SetColor = function(c) assignedColor = c; refresh() end,
-                    SetBind = function(b) assignedBind = b; refresh() end,
-                }
-                table.insert(section.Items, obj)
-                return obj
-            end
-
-            -- Button
-            function section:CreateButton(text, callback)
-                local btn = new("TextButton", {Parent = secFrame, Size = UDim2.new(1,-20,0,24), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1, Text = text, TextColor3 = self._owner._theme, Font = Enum.Font.SourceSansBold, TextSize = 14})
-                btn.MouseButton1Click:Connect(function()
-                    pcall(callback)
-                end)
-                table.insert(section.Items, btn)
-                return btn
-            end
-
-            -- Slider
-            function section:CreateSlider(label, min, max, default, callback)
-                min = min or 0; max = max or 100; default = default or min
-                local frame = new("Frame", {Parent = secFrame, Size = UDim2.new(1,-20,0,28), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1})
-                local labelLbl = new("TextLabel", {Parent = frame, Text = label, Size = UDim2.new(0.6,0,1,0), BackgroundTransparency = 1, TextColor3 = Color3.new(1,1,1), TextSize = 14})
-                local valueLbl = new("TextLabel", {Parent = frame, Text = tostring(default), Size = UDim2.new(0.4,-6,1,0), Position = UDim2.new(0.6,6,0,0), BackgroundTransparency = 1, TextColor3 = Color3.new(1,1,1), TextXAlignment = Enum.TextXAlignment.Right})
-                local bar = new("Frame", {Parent = frame, Size = UDim2.new(1,-20,0,6), Position = UDim2.new(0,10,1,-12), BackgroundColor3 = Color3.fromRGB(60,60,60), BorderSizePixel = 0})
-                local knob = new("TextButton", {Parent = bar, Size = UDim2.new(0,8,1,0), BackgroundColor3 = self._owner._theme, BorderSizePixel = 0, Text = ""})
-
-                local percent = clamp((default - min) / (max - min), 0, 1)
-                knob.Position = UDim2.new(percent, -4, 0, 0)
-                valueLbl.Text = string.format("%.2f", default)
-
-                local dragging = false
-                knob.MouseButton1Down:Connect(function() dragging = true end)
-                UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
-                UserInputService.InputChanged:Connect(function(input)
-                    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                        local abs = UserInputService:GetMouseLocation()
-                        local pos = bar.AbsolutePosition
-                        local size = bar.AbsoluteSize
-                        local x = clamp((abs.X - pos.X)/size.X, 0, 1)
-                        knob.Position = UDim2.new(x, -4, 0, 0)
-                        local val = min + (max - min) * x
-                        valueLbl.Text = string.format("%.2f", val)
-                        pcall(callback, val)
-                    end
-                end)
-
-                local obj = {
-                    Set = function(v) local p = clamp((v - min)/(max-min),0,1); knob.Position = UDim2.new(p, -4, 0, 0); valueLbl.Text = tostring(v); pcall(callback, v) end,
-                    Get = function() return tonumber(valueLbl.Text) end
-                }
-                table.insert(section.Items, obj)
-                return obj
-            end
-
-            -- Dropdown
-            function section:CreateDropdown(label, options, callback)
-                local button = new("TextButton", {Parent = secFrame, Size = UDim2.new(1,-20,0,22), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1, Text = ""})
-                local lbl = new("TextLabel", {Parent = button, Text = label, BackgroundTransparency = 1, Position = UDim2.new(0.02,0,0,0), Size = UDim2.new(0.6,0,1,0), TextColor3 = Color3.new(1,1,1), TextSize = 17})
-                local arrow = new("TextLabel", {Parent = button, Text = "▼", Size = UDim2.new(0,24,1,0), Position = UDim2.new(1,-28,0,0), BackgroundTransparency = 1, TextColor3 = Color3.new(1,1,1)})
-                local sel = new("TextLabel", {Parent = button, Text = options[1] or "", Size = UDim2.new(0.35,-40,1,0), Position = UDim2.new(0.6,6,0,0), BackgroundTransparency = 1, TextColor3 = Color3.new(1,1,1)})
-                local dropdown = new("Frame", {Parent = button, Size = UDim2.new(1,0,0,#options*18), Position = UDim2.new(0,0,1,0), BackgroundColor3 = Color3.fromRGB(43,43,43), Visible = false, BorderSizePixel = 1})
-                dropdown.ClipsDescendants = true
-                for i,opt in ipairs(options) do
-                    local optBtn = new("TextButton", {Parent = dropdown, Text = opt, TextColor3 = Color3.new(1,1,1), Size = UDim2.new(1,0,0,18), Position = UDim2.new(0,0,(i-1)*18,0), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1})
-                    optBtn.MouseButton1Click:Connect(function()
-                        sel.Text = opt
-                        dropdown.Visible = false
-                        pcall(callback, opt)
-                    end)
-                end
-                button.MouseButton1Click:Connect(function()
-                    dropdown.Visible = not dropdown.Visible
-                end)
-                local obj = {
-                    Get = function() return sel.Text end,
-                    Set = function(v) sel.Text = v end
-                }
-                table.insert(section.Items, obj)
-                return obj
-            end
-
-            table.insert(self.Sections, section)
-            return section
-        end
-
-        table.insert(self._tabs, tab)
-        return tab
-    end
-
-    -- Config UI helpers (global)
-    function lib:CreateConfigControls(section)
-        -- Save Button
-        local nameBox = section:CreateButton("Config Name (click Save to use)", function() end) -- placeholder; we will replace with TextBox-like UI below
-        -- we'll actually create a TextBox style via parent frame
-        local fake = nameBox
-        fake.BackgroundTransparency = 1
-        fake.Text = ""
-
-        -- create a custom row: TextBox, Save, Load, Refresh, Dropdown
-        local container = new("Frame", {Parent = section.Frame, Size = UDim2.new(1,-20,0,28), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1})
-        local nameTxt = new("TextBox", {Parent = container, Size = UDim2.new(0.5,0,1,0), Position = UDim2.new(0,6,0,0), Text = "cfg1", ClearTextOnFocus = false, BackgroundColor3 = Color3.fromRGB(255,255,255), TextColor3 = Color3.fromRGB(0,0,0), BorderSizePixel = 1})
-        local btnSave = new("TextButton", {Parent = container, Size = UDim2.new(0,70,0,22), Position = UDim2.new(0.5,6,0,3), Text = "Save", BackgroundColor3 = Color3.fromRGB(15,102,166), TextColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
-        local btnLoad = new("TextButton", {Parent = container, Size = UDim2.new(0,70,0,22), Position = UDim2.new(0.5,82,0,3), Text = "Load", BackgroundColor3 = Color3.fromRGB(15,102,166), TextColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
-        local btnRefresh = new("TextButton", {Parent = container, Size = UDim2.new(0,50,0,22), Position = UDim2.new(1,-56,0,3), Text = "Refresh", BackgroundColor3 = Color3.fromRGB(43,43,43), TextColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
-        local cfgDropdown = section:CreateDropdown("Configs", {}, function() end)
-        -- put dropdown's button in container position manually by moving UI parent - instead we'll just hide the auto one and create our own small dropdown display
-        -- Simpler: create small label that displays selected config and use dropdown from section:CreateDropdown above (it appended to the section Frame). Keep it simple:
-        lib._configDropdown = cfgDropdown
-
-        local function refreshList()
-            local files = list_cfg_files()
-            -- rebuild dropdown options: we'll create a new dropdown element by setting text options - easier is to replace the original dropdown by removing old ones and creating new
-            -- naive approach: set to first found
-            if #files == 0 then
-                cfgDropdown.Set("None")
-            else
-                cfgDropdown.Set(files[1])
-            end
-        end
-
-        btnRefresh.MouseButton1Click:Connect(function() refreshList() end)
-
-        btnSave.MouseButton1Click:Connect(function()
-            local name = nameTxt.Text:gsub("%s+","")
-            if name == "" then
-                -- create a default name like cfg1/cfg2
-                local files = list_cfg_files()
-                local i = 1
-                while true do
-                    local candidate = "cfg"..i
-                    local exists = false
-                    for _,v in ipairs(files) do if v == candidate then exists = true break end end
-                    if not exists then
-                        name = candidate
-                        break
-                    end
-                    i = i + 1
-                end
-            end
-            -- collect current ui state
-            local state = {toggles = {}, sliders = {}, dropdowns = {}}
-            for i,t in ipairs(self._tabs) do
-                for _,tabSec in ipairs(t.Sections) do
-                    for _,it in ipairs(tabSec.Items) do
-                        -- Toggles and sliders are tables; identify by existence of Get method
-                        if type(it) == "table" and it.Get then
-                            -- assume toggle if it has SetColor or SetBind? heuristics
-                            if it.SetColor or it.SetBind then
-                                table.insert(state.toggles, {value = it.Get and it.Get() or false})
-                            else
-                                -- assume slider/dropdown
-                                local ok, val = pcall(function() return it.Get() end)
-                                if ok and type(val) == "number" then
-                                    table.insert(state.sliders, val)
-                                else
-                                    table.insert(state.dropdowns, tostring(val))
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            save_config(name, state)
-            refreshList()
-        end)
-
-        btnLoad.MouseButton1Click:Connect(function()
-            local selected = lib._configDropdown and lib._configDropdown.Get() or nil
-            if not selected or selected == "None" then return end
-            local tbl = load_config(selected)
-            if tbl then
-                -- naive apply: attempt to apply toggles/sliders/dropdowns in simple order
-                local t_i, s_i, d_i = 1,1,1
-                for i,t in ipairs(self._tabs) do
-                    for _,tabSec in ipairs(t.Sections) do
-                        for _,it in ipairs(tabSec.Items) do
-                            if type(it) == "table" and it.Get then
-                                if it.SetColor or it.SetBind then
-                                    local v = tbl.toggles and tbl.toggles[t_i] and tbl.toggles[t_i].value
-                                    if v ~= nil then it.Set(v) end
-                                    t_i = t_i + 1
-                                else
-                                    local ok, val = pcall(function() return it.Get() end)
-                                    if ok and type(val) == "number" then
-                                        local v = tbl.sliders and tbl.sliders[s_i]
-                                        if v then it.Set(v) end
-                                        s_i = s_i + 1
-                                    else
-                                        local v = tbl.dropdowns and tbl.dropdowns[d_i]
-                                        if v then it.Set(v) end
-                                        d_i = d_i + 1
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end)
-
-        refreshList()
-        return container
-    end
-
-    -- Refresh config listing: expose to user
-    function lib:RefreshConfigs()
-        ensure_cfg_fs()
-        local files = list_cfg_files()
-        return files
-    end
-
-    -- set default theme to orange per request
-    lib:SetTheme(DEFAULT_THEME)
-
-    -- return library instance
-    return lib
 end
 
--- Example usage: (you can remove or comment this block in production)
-local __ilo = ILO.CreateWindow()
-__ilo:SetTheme(Color3.fromRGB(255,165,0)) -- default orange
-local t1 = __ilo:CreateTab("Home")
-local s1 = t1:CreateSection("Example")
-local tog = s1:CreateToggle("ESP", {ColorPicker = true, Bind = true, Default = false, Callback = function(state) print("ESP", state) end})
-local btn = s1:CreateButton("Do Thing", function() print("button pressed") end)
-local sl = s1:CreateSlider("FOV", 0, 180, 60, function(v) print("fov", v) end)
-local dd = s1:CreateDropdown("Target", {"Head","Body","Closest"}, function(c) print("target", c) end)
-local cfgSec = t1:CreateSection("Configs")
-cfgSec:CreateButton("Config: Save/Load (use below row)", function() end)
--- create config controls in that section
-__ilo:CreateConfigControls(cfgSec)
+function API:CreateToggle(label, opts) return CreateToggle(label, opts) end
+function API:CreateButton(text, cb) return CreateButton(text, cb) end
+function API:CreateSlider(min,max,default,cb) return CreateSlider(min,max,default,cb) end
+function API:CreateDropdown(opts) return CreateDropdown(opts) end
+function API:FadeOpen() ILO:FadeOpen() end
+function API:FadeClose() ILO:FadeClose() end
+function API:ToggleMenu() ILO:Toggle() end
 
--- show UI initially (false -> closed)
-__ilo:SetOpen(false)
+-- Config helpers in API
+function API:SaveConfig(name)
+    if not name or name == "" then return false end
+    local snapshot = {}
+    for _,c in ipairs(addedControls) do
+        if c.type == "toggle" then
+            table.insert(snapshot, {type="toggle", value = c.get()})
+        elseif c.type == "slider" then
+            table.insert(snapshot, {type="slider", value = c.get()})
+        elseif c.type == "dropdown" then
+            table.insert(snapshot, {type="dropdown", value = c.get()})
+        end
+    end
+    return save_cfg(name, snapshot)
+end
+function API:LoadConfig(name)
+    local tbl = load_cfg(name)
+    if not tbl then return false end
+    local i = 1
+    for _,entry in ipairs(tbl) do
+        local ctrl = addedControls[i]
+        if ctrl then
+            if entry.type == "toggle" and ctrl.type == "toggle" then
+                if ctrl.set then pcall(function() ctrl.set(entry.value) end) end
+            elseif entry.type == "slider" and ctrl.type == "slider" then
+                if ctrl.set then pcall(function() ctrl.set(entry.value) end) end
+            elseif entry.type == "dropdown" and ctrl.type == "dropdown" then
+                if ctrl.set then pcall(function() ctrl.set(entry.value) end) end
+            end
+        end
+        i = i + 1
+    end
+    return true
+end
+function API:GetConfigList() return list_cfg_files() end
 
--- Expose library globally for convenience
+-- Expose and set default theme
+API:SetTheme(DEFAULT_THEME)
+
+-- ensure Window visible and open state
+Window.Visible = true
+deepTweenTransparency(Window, 0, TweenInfo.new(0)) -- ensure fully visible at init
+
+-- return API
 getgenv = getgenv or function() return _G end
-getgenv().ILO = ILO
+getgenv().ILO = API
 
-return ILO
+return API
