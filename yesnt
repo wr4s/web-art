@@ -1,0 +1,768 @@
+-- ILO UI Library v1
+-- Single-file loadstring-friendly UI library with animations & config system
+-- Default theme: ORANGE (255,165,0)
+-- Author: generated for you
+
+local ILO = {}
+ILO.__index = ILO
+
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+
+local localPlayer = Players.LocalPlayer
+local playerGui = localPlayer:WaitForChild("PlayerGui")
+
+-- Executor FS compatibility helpers
+local has_writefile, has_readfile, has_isfolder, has_makefolder = false, false, false, false
+local writefile_fn, readfile_fn, isfolder_fn, makefolder_fn, listfiles_fn
+
+if writefile then
+    has_writefile = true
+    writefile_fn = writefile
+end
+if readfile then
+    has_readfile = true
+    readfile_fn = readfile
+end
+if isfolder then
+    has_isfolder = true
+    isfolder_fn = isfolder
+end
+if makefolder then
+    has_makefolder = true
+    makefolder_fn = makefolder
+end
+-- some executors provide listfiles
+if listfiles then
+    listfiles_fn = listfiles
+end
+
+local function safe_makefolder(path)
+    if has_isfolder and has_makefolder then
+        if not isfolder_fn(path) then
+            pcall(function() makefolder_fn(path) end)
+        end
+    elseif has_makefolder then
+        pcall(function() makefolder_fn(path) end)
+    end
+end
+local function safe_writefile(path, contents)
+    if has_writefile then
+        pcall(function() writefile_fn(path, contents) end)
+        return true
+    end
+    return false
+end
+local function safe_readfile(path)
+    if has_readfile and pcall(function() readfile_fn(path) end) then
+        return readfile_fn(path)
+    end
+    return nil
+end
+local function safe_listfiles(path)
+    if listfiles_fn then
+        local ok, res = pcall(function() return listfiles_fn(path) end)
+        if ok then return res end
+    end
+    -- fallback: attempt to read directory by scanning known filenames in cfgs if available - not reliable
+    return {}
+end
+
+-- default theme (orange)
+local DEFAULT_THEME = Color3.fromRGB(255,165,0)
+local THEME = DEFAULT_THEME
+
+-- Helpers
+local function new(instType, props)
+    local obj = Instance.new(instType)
+    if props then
+        for k,v in pairs(props) do
+            if pcall(function() obj[k] = v end) then end
+        end
+    end
+    return obj
+end
+
+local function clamp(n, a, b) return math.max(a, math.min(b, n)) end
+
+local function deepTweenGuiTransparency(root, target, tweenInfo)
+    -- target: 0 for visible (transparent = 0 for backgrounds? we'll map)
+    -- We'll tween a set of common transparency properties for all descendants:
+    -- BackgroundTransparency, TextTransparency, ImageTransparency, ImageLabel etc.
+    tweenInfo = tweenInfo or TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tweens = {}
+    local function collect(obj)
+        -- for every descendant, decide properties and tween them
+        if obj:IsA("GuiObject") then
+            local goals = {}
+            -- BackgroundTransparency (Frames, Buttons, etc)
+            if obj.BackgroundTransparency ~= nil then
+                goals.BackgroundTransparency = target
+            end
+            -- TextTransparency
+            if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+                goals.TextTransparency = target
+            end
+            -- ImageTransparency
+            if obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
+                goals.ImageTransparency = target
+            end
+            -- UIStroke
+            for _, child in ipairs(obj:GetChildren()) do
+                if child:IsA("UIStroke") then
+                    goals["UIStroke.Transparency"] = target
+                end
+            end
+            -- UIGradient alpha isn't directly tweenable; if present we set its Transparency via a tweenable property:
+            -- But direct UIGradient.Transparency is NumberSequence; we can't tween easily. Skip.
+            if next(goals) then
+                table.insert(tweens, TweenService:Create(obj, tweenInfo, goals))
+            end
+        end
+        for _,c in ipairs(obj:GetChildren()) do collect(c) end
+    end
+    collect(root)
+    for _,t in ipairs(tweens) do t:Play() end
+end
+
+-- Utility: tween Color3 for a BackgroundColor3 or similar
+local function TweenProperty(obj, prop, value, tinfo)
+    local ok, t = pcall(function()
+        return TweenService:Create(obj, tinfo or TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {[prop] = value})
+    end)
+    if ok and t then t:Play() end
+end
+
+-- Color picker modal (simple)
+local function CreateColorPicker(parent)
+    local modal = new("Frame", {
+        Parent = parent,
+        Size = UDim2.new(0, 360, 0, 240),
+        AnchorPoint = Vector2.new(0.5,0.5),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        BackgroundColor3 = Color3.fromRGB(43,43,43),
+        BorderSizePixel = 1,
+        Visible = false,
+        ZIndex = 500
+    })
+    modal.Name = "ILOColorPicker"
+
+    local title = new("TextLabel", {Parent = modal, Size = UDim2.new(1,0,0,26), Position = UDim2.new(0,0,0,0), BackgroundTransparency = 1, Text = "Color Picker", TextColor3 = Color3.new(1,1,1), TextSize = 16, Font = Enum.Font.SourceSansBold})
+
+    -- simple hue bar + sv box approach
+    local svBox = new("Frame", {Parent = modal, Size = UDim2.new(0,200,0,160), Position = UDim2.new(0,10,0,36), BackgroundColor3 = Color3.new(1,0,0), BorderSizePixel = 1})
+    local hueBar = new("Frame", {Parent = modal, Size = UDim2.new(0,20,0,160), Position = UDim2.new(0,220,0,36), BorderSizePixel = 1})
+    local hueGrad = Instance.new("UIGradient", hueBar)
+    hueGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromHSV(0,1,1)),
+        ColorSequenceKeypoint.new(0.17, Color3.fromHSV(60/360,1,1)),
+        ColorSequenceKeypoint.new(0.33, Color3.fromHSV(120/360,1,1)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromHSV(180/360,1,1)),
+        ColorSequenceKeypoint.new(0.67, Color3.fromHSV(240/360,1,1)),
+        ColorSequenceKeypoint.new(0.83, Color3.fromHSV(300/360,1,1)),
+        ColorSequenceKeypoint.new(1, Color3.fromHSV(360/360,1,1))
+    })
+    hueGrad.Rotation = 0
+
+    local preview = new("Frame", {Parent = modal, Size = UDim2.new(0,100,0,40), Position = UDim2.new(0,10,0,200-40), BackgroundColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
+    local rgbBox = new("TextBox", {Parent = modal, Size = UDim2.new(0,200,0,22), Position = UDim2.new(0,10,0,200-18), Text = "255 165 0", ClearTextOnFocus = false, BackgroundColor3 = Color3.new(1,1,1), TextColor3 = Color3.new(0,0,0), BorderSizePixel = 1})
+
+    local btnSelect = new("TextButton", {Parent = modal, Size = UDim2.new(0,70,0,26), Position = UDim2.new(1,-80,0,200-18), Text = "Select", BackgroundColor3 = THEME, TextColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
+    local btnCancel = new("TextButton", {Parent = modal, Size = UDim2.new(0,70,0,26), Position = UDim2.new(1,-160,0,200-18), Text = "Cancel", BackgroundColor3 = Color3.fromRGB(60,60,60), TextColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
+
+    -- internal state
+    local hue = 0
+    local sat, val = 1, 1
+
+    local function updatePreview()
+        local c = Color3.fromHSV(hue, sat, val)
+        preview.BackgroundColor3 = c
+        rgbBox.Text = string.format("%d %d %d", math.floor(c.R*255+0.5), math.floor(c.G*255+0.5), math.floor(c.B*255+0.5))
+    end
+    updatePreview()
+
+    -- simple clicking on hueBar sets hue
+    local editingHue = false
+    local editingSV = false
+
+    hueBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            editingHue = true
+            local y = clamp((input.Position.Y - hueBar.AbsolutePosition.Y)/hueBar.AbsoluteSize.Y, 0, 1)
+            hue = 1 - y
+            updatePreview()
+        end
+    end)
+    hueBar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then editingHue = false end
+    end)
+    svBox.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            editingSV = true
+            local x = clamp((input.Position.X - svBox.AbsolutePosition.X)/svBox.AbsoluteSize.X, 0, 1)
+            local y = clamp((input.Position.Y - svBox.AbsolutePosition.Y)/svBox.AbsoluteSize.Y, 0, 1)
+            sat = x
+            val = 1 - y
+            updatePreview()
+        end
+    end)
+    svBox.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then editingSV = false end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if editingHue and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local abs = UserInputService:GetMouseLocation()
+            local y = clamp((abs.Y - hueBar.AbsolutePosition.Y)/hueBar.AbsoluteSize.Y, 0, 1)
+            hue = 1 - y
+            updatePreview()
+        end
+        if editingSV and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local abs = UserInputService:GetMouseLocation()
+            local x = clamp((abs.X - svBox.AbsolutePosition.X)/svBox.AbsoluteSize.X, 0, 1)
+            local y = clamp((abs.Y - svBox.AbsolutePosition.Y)/svBox.AbsoluteSize.Y, 0, 1)
+            sat = x
+            val = 1 - y
+            updatePreview()
+        end
+    end)
+
+    rgbBox.FocusLost:Connect(function(enter)
+        local s = rgbBox.Text
+        local r,g,b = s:match("(%d+)%s+(%d+)%s+(%d+)")
+        if r and g and b then
+            local c = Color3.fromRGB(clamp(tonumber(r),0,255), clamp(tonumber(g),0,255), clamp(tonumber(b),0,255))
+            hue, sat, val = Color3.toHSV(c)
+            updatePreview()
+        end
+    end)
+
+    return {
+        Frame = modal,
+        Open = function(initial)
+            if initial then
+                local h,s,v = Color3.toHSV(initial)
+                hue, sat, val = h, s, v
+            end
+            updatePreview()
+            modal.Visible = true
+            modal.ZIndex = 500
+        end,
+        Close = function() modal.Visible = false end,
+        Get = function() return preview.BackgroundColor3 end,
+        SelectButton = btnSelect,
+        CancelButton = btnCancel,
+        RGBBox = rgbBox
+    }
+end
+
+-- Config system
+local CFG_ROOT = "ILO"
+local CFG_FOLDER = CFG_ROOT.."/cfgs"
+
+local function ensure_cfg_fs()
+    safe_makefolder(CFG_ROOT)
+    safe_makefolder(CFG_FOLDER)
+end
+
+local function list_cfg_files()
+    ensure_cfg_fs()
+    local files = {}
+    if listfiles then
+        local ok, data = pcall(function() return listfiles(CFG_FOLDER) end)
+        if ok and type(data) == "table" then
+            for _,f in ipairs(data) do
+                if f:match("%.ilo$") then
+                    local name = f:match("([^/\\]+)%.ilo$")
+                    table.insert(files, name)
+                end
+            end
+            return files
+        end
+    end
+    -- fallback: no reliable list -> attempt to look for common names? return empty
+    return files
+end
+
+local function save_config(name, tbl)
+    ensure_cfg_fs()
+    local path = CFG_FOLDER.."/"..name..".ilo"
+    local ok, data = pcall(function() return HttpService:JSONEncode(tbl) end)
+    if ok then
+        return safe_writefile(path, data)
+    end
+    return false
+end
+
+local function load_config(name)
+    ensure_cfg_fs()
+    local path = CFG_FOLDER.."/"..name..".ilo"
+    local contents = safe_readfile(path)
+    if contents then
+        local ok, tbl = pcall(function() return HttpService:JSONDecode(contents) end)
+        if ok then return tbl end
+    end
+    return nil
+end
+
+-- Library core
+function ILO.CreateWindow(opts)
+    opts = opts or {}
+    local rootName = opts.Name or "ILO_UI"
+    -- create ScreenGui or use existing
+    local screenGui = playerGui:FindFirstChild(rootName)
+    if not screenGui then
+        screenGui = new("ScreenGui", {Parent = playerGui})
+        screenGui.Name = rootName
+        screenGui.ResetOnSpawn = false
+    end
+
+    -- Window frame (use your template frame if provided)
+    local window = screenGui:FindFirstChild("Window")
+    if not window then
+        window = new("Frame", {
+            Parent = screenGui,
+            Name = "Window",
+            Size = UDim2.new(0,612,0,482),
+            Position = UDim2.new(0.173,0,0.08346,0),
+            BackgroundColor3 = Color3.fromRGB(21,21,21),
+            BorderSizePixel = 1,
+        })
+    end
+
+    -- Sidebar
+    local sideBar = window:FindFirstChild("SideBar")
+    if not sideBar then
+        sideBar = new("Frame", {Parent = window, Name = "SideBar", Size = UDim2.new(0,100,1,0), Position = UDim2.new(0,0,0,0), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1})
+    end
+
+    local activeTabBar = sideBar:FindFirstChild("ActiveTab")
+    if not activeTabBar then
+        activeTabBar = new("Frame", {Parent = sideBar, Name = "ActiveTab", Size = UDim2.new(0,44,0,2), BackgroundColor3 = THEME, BorderSizePixel = 0})
+    end
+
+    local contentRoot = window:FindFirstChild("ContentRoot")
+    if not contentRoot then
+        contentRoot = new("Frame", {Parent = window, Name = "ContentRoot", Size = UDim2.new(1, -100, 1, 0), Position = UDim2.new(0.2, 0, 0, 0), BackgroundTransparency = 1})
+        contentRoot.ClipsDescendants = true
+    end
+
+    local lib = setmetatable({}, ILO)
+    lib.ScreenGui = screenGui
+    lib.Window = window
+    lib.SideBar = sideBar
+    lib.ActiveTabBar = activeTabBar
+    lib.ContentRoot = contentRoot
+    lib._tabs = {}
+    lib._theme = THEME
+    lib._open = false
+    lib._toggles = {} -- for saving state
+    lib._sliders = {}
+    lib._dropdowns = {}
+    lib._binds = {}
+    lib._colorpickers = {}
+    lib._configDropdown = nil
+
+    -- Theme function
+    function lib:SetTheme(color3)
+        self._theme = color3 or DEFAULT_THEME
+        THEME = self._theme
+        if self.ActiveTabBar then self.ActiveTabBar.BackgroundColor3 = self._theme end
+    end
+
+    -- Fade open/close (affects all descendants)
+    function lib:SetOpen(state)
+        state = not not state
+        if state == self._open then return end
+        self._open = state
+        if state then
+            self.ScreenGui.Enabled = true
+            -- set low transparencies then tween into view (target = 0 for transparency props)
+            deepTweenGuiTransparency(self.Window, 0, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
+            -- optional scale/position animation:
+            TweenService:Create(self.Window, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = self.Window.Position}):Play()
+            self.Window.Visible = true
+        else
+            -- tween to hidden (transparency 1)
+            deepTweenGuiTransparency(self.Window, 1, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In))
+            delay(0.25, function() -- hide after tween
+                pcall(function() self.Window.Visible = false end)
+            end)
+        end
+    end
+
+    -- default bind: Delete key
+    local toggleKey = Enum.KeyCode.Delete
+    UserInputService.InputBegan:Connect(function(input, gpe)
+        if gpe then return end
+        if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == toggleKey then
+            lib:SetOpen(not lib._open)
+        end
+    end)
+
+    -- Create tab
+    function lib:CreateTab(name)
+        local tabBtn = new("TextButton", {Parent = self.SideBar, Text = name, Size = UDim2.new(0,44,0,28), BackgroundTransparency = 1, TextSize = 21, TextColor3 = Color3.new(1,1,1), BorderSizePixel = 0})
+        local index = #self._tabs + 1
+        local y = 0.25 + (index-1) * 0.087
+        tabBtn.Position = UDim2.new(0.27, 0, y, 0)
+
+        local contentFrame = new("Frame", {Parent = self.ContentRoot, Size = UDim2.new(0,400,0,416), Position = UDim2.new(0.02 + ((index-1)*0.01), 0, 0.09544, 0), BackgroundColor3 = Color3.fromRGB(36,36,36), Visible = (#self._tabs==0)})
+        contentFrame.ClipsDescendants = true
+
+        local tab = {Name = name, Button = tabBtn, Frame = contentFrame, Sections = {}}
+        function tab:SetActive()
+            for _,t in ipairs(self._owner._tabs) do
+                t.Frame.Visible = false
+            end
+            self.Frame.Visible = true
+            -- move active bar
+            self._owner.ActiveTabBar.Position = UDim2.new(self.Button.Position.X.Scale, self.Button.Position.X.Offset, self.Button.Position.Y.Scale + self.Button.Size.Y.Scale - 0.02, self.Button.Position.Y.Offset)
+            self._owner.ActiveTabBar.Size = UDim2.new(self.Button.Size.X.Scale, self.Button.Size.X.Offset, 0,2)
+            self._owner.ActiveTabBar.BackgroundColor3 = self._owner._theme
+        end
+
+        tab._owner = self
+        tab.Button.MouseButton1Click:Connect(function()
+            tab:SetActive()
+        end)
+
+        -- Section creator
+        function tab:CreateSection(title)
+            local secFrame = new("Frame", {Parent = self.Frame, Size = UDim2.new(0,202,0,416), Position = UDim2.new(0,0,0,0), BackgroundColor3 = Color3.fromRGB(36,36,36), BorderSizePixel = 1})
+            local nameBar = new("Frame", {Parent = secFrame, Size = UDim2.new(1,0,0,30), Position = UDim2.new(0,0,-0.07212,0), BackgroundColor3 = self._owner._theme, BorderSizePixel = 1})
+            local text = new("TextLabel", {Parent = nameBar, Text = title, BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0), TextColor3 = Color3.new(1,1,1), TextSize = 14})
+            secFrame.Layout = Instance.new("UIListLayout", secFrame)
+            secFrame.Layout.Padding = UDim.new(0,6)
+            secFrame.Layout.VerticalAlignment = Enum.VerticalAlignment.Top
+            secFrame.Layout.SortOrder = Enum.SortOrder.LayoutOrder
+
+            local section = {Frame = secFrame, Items = {}}
+
+            -- Toggle
+            function section:CreateToggle(label, options)
+                options = options or {}
+                local btn = new("TextButton", {Parent = secFrame, Size = UDim2.new(1,-20,0,22), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1, Text = ""})
+                local lbl = new("TextLabel", {Parent = btn, Text = label, BackgroundTransparency = 1, Position = UDim2.new(0.08,0,0,0), Size = UDim2.new(0.7,0,1,0), TextColor3 = Color3.new(1,1,1), TextSize = 17})
+                local switch = new("Frame", {Parent = btn, Size = UDim2.new(0,12,0,13), Position = UDim2.new(0.02,0,0.12,0), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1})
+                local switchFill = new("Frame", {Parent = switch, Size = UDim2.new(0,10,0,11), Position = UDim2.new(0,0,0,0), BackgroundColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
+
+                local colorBtn, bindBtn
+                if options.ColorPicker then
+                    colorBtn = new("TextButton", {Parent = btn, Size = UDim2.new(0,36,0,18), Position = UDim2.new(1,-42,0.12,0), Text = "", BackgroundColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
+                end
+                if options.Bind then
+                    bindBtn = new("TextButton", {Parent = btn, Size = UDim2.new(0,26,0,18), Position = UDim2.new(1,-84,0.12,0), Text = "...", BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1, TextColor3 = Color3.new(1,1,1)})
+                end
+
+                local enabled = options.Default or false
+                local cb = options.Callback
+                local assignedBind = nil
+                local assignedColor = options.Color or Color3.fromRGB(255,255,255)
+
+                local function refresh()
+                    if enabled then
+                        switchFill.BackgroundColor3 = self._owner._theme
+                    else
+                        switchFill.BackgroundColor3 = Color3.fromRGB(255,255,255)
+                    end
+                    if colorBtn then colorBtn.BackgroundColor3 = assignedColor end
+                    if bindBtn then bindBtn.Text = assignedBind and tostring(assignedBind.KeyCode) or "..." end
+                end
+
+                btn.MouseButton1Click:Connect(function()
+                    enabled = not enabled
+                    pcall(cb, enabled)
+                    refresh()
+                end)
+
+                -- Color picker
+                local cpAPI
+                if colorBtn then
+                    local cp = CreateColorPicker(self._owner.ScreenGui)
+                    cpAPI = cp
+                    cp.SelectButton.MouseButton1Click:Connect(function()
+                        assignedColor = cp.Get(cp)
+                        cp.Close(cp)
+                        refresh()
+                    end)
+                    cp.CancelButton.MouseButton1Click:Connect(function() cp.Close(cp) end)
+                    colorBtn.MouseButton1Click:Connect(function() cp.Open(cp, assignedColor) end)
+                    colorBtn.BackgroundColor3 = assignedColor
+                end
+
+                -- Bind capture
+                if bindBtn then
+                    local capturing = false
+                    bindBtn.MouseButton1Click:Connect(function()
+                        capturing = true
+                        bindBtn.Text = "..."
+                        local conn
+                        conn = UserInputService.InputBegan:Connect(function(input, gpe)
+                            if capturing then
+                                assignedBind = input
+                                bindBtn.Text = assignedBind.KeyCode and tostring(assignedBind.KeyCode) or tostring(assignedBind.UserInputType)
+                                capturing = false
+                                conn:Disconnect()
+                            end
+                        end)
+                    end)
+                end
+
+                -- global to toggle by keybind if set
+                UserInputService.InputBegan:Connect(function(input, gpe)
+                    if gpe then return end
+                    if assignedBind and input.UserInputType == assignedBind.UserInputType and ((assignedBind.KeyCode and input.KeyCode == assignedBind.KeyCode) or (assignedBind.UserInputType == input.UserInputType and not assignedBind.KeyCode)) then
+                        enabled = not enabled
+                        pcall(cb, enabled)
+                        refresh()
+                    end
+                end)
+
+                refresh()
+                local obj = {
+                    Get = function() return enabled end,
+                    Set = function(val) enabled = not not val; refresh(); pcall(cb, enabled) end,
+                    SetColor = function(c) assignedColor = c; refresh() end,
+                    SetBind = function(b) assignedBind = b; refresh() end,
+                }
+                table.insert(section.Items, obj)
+                return obj
+            end
+
+            -- Button
+            function section:CreateButton(text, callback)
+                local btn = new("TextButton", {Parent = secFrame, Size = UDim2.new(1,-20,0,24), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1, Text = text, TextColor3 = self._owner._theme, Font = Enum.Font.SourceSansBold, TextSize = 14})
+                btn.MouseButton1Click:Connect(function()
+                    pcall(callback)
+                end)
+                table.insert(section.Items, btn)
+                return btn
+            end
+
+            -- Slider
+            function section:CreateSlider(label, min, max, default, callback)
+                min = min or 0; max = max or 100; default = default or min
+                local frame = new("Frame", {Parent = secFrame, Size = UDim2.new(1,-20,0,28), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1})
+                local labelLbl = new("TextLabel", {Parent = frame, Text = label, Size = UDim2.new(0.6,0,1,0), BackgroundTransparency = 1, TextColor3 = Color3.new(1,1,1), TextSize = 14})
+                local valueLbl = new("TextLabel", {Parent = frame, Text = tostring(default), Size = UDim2.new(0.4,-6,1,0), Position = UDim2.new(0.6,6,0,0), BackgroundTransparency = 1, TextColor3 = Color3.new(1,1,1), TextXAlignment = Enum.TextXAlignment.Right})
+                local bar = new("Frame", {Parent = frame, Size = UDim2.new(1,-20,0,6), Position = UDim2.new(0,10,1,-12), BackgroundColor3 = Color3.fromRGB(60,60,60), BorderSizePixel = 0})
+                local knob = new("TextButton", {Parent = bar, Size = UDim2.new(0,8,1,0), BackgroundColor3 = self._owner._theme, BorderSizePixel = 0, Text = ""})
+
+                local percent = clamp((default - min) / (max - min), 0, 1)
+                knob.Position = UDim2.new(percent, -4, 0, 0)
+                valueLbl.Text = string.format("%.2f", default)
+
+                local dragging = false
+                knob.MouseButton1Down:Connect(function() dragging = true end)
+                UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+                UserInputService.InputChanged:Connect(function(input)
+                    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                        local abs = UserInputService:GetMouseLocation()
+                        local pos = bar.AbsolutePosition
+                        local size = bar.AbsoluteSize
+                        local x = clamp((abs.X - pos.X)/size.X, 0, 1)
+                        knob.Position = UDim2.new(x, -4, 0, 0)
+                        local val = min + (max - min) * x
+                        valueLbl.Text = string.format("%.2f", val)
+                        pcall(callback, val)
+                    end
+                end)
+
+                local obj = {
+                    Set = function(v) local p = clamp((v - min)/(max-min),0,1); knob.Position = UDim2.new(p, -4, 0, 0); valueLbl.Text = tostring(v); pcall(callback, v) end,
+                    Get = function() return tonumber(valueLbl.Text) end
+                }
+                table.insert(section.Items, obj)
+                return obj
+            end
+
+            -- Dropdown
+            function section:CreateDropdown(label, options, callback)
+                local button = new("TextButton", {Parent = secFrame, Size = UDim2.new(1,-20,0,22), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1, Text = ""})
+                local lbl = new("TextLabel", {Parent = button, Text = label, BackgroundTransparency = 1, Position = UDim2.new(0.02,0,0,0), Size = UDim2.new(0.6,0,1,0), TextColor3 = Color3.new(1,1,1), TextSize = 17})
+                local arrow = new("TextLabel", {Parent = button, Text = "▼", Size = UDim2.new(0,24,1,0), Position = UDim2.new(1,-28,0,0), BackgroundTransparency = 1, TextColor3 = Color3.new(1,1,1)})
+                local sel = new("TextLabel", {Parent = button, Text = options[1] or "", Size = UDim2.new(0.35,-40,1,0), Position = UDim2.new(0.6,6,0,0), BackgroundTransparency = 1, TextColor3 = Color3.new(1,1,1)})
+                local dropdown = new("Frame", {Parent = button, Size = UDim2.new(1,0,0,#options*18), Position = UDim2.new(0,0,1,0), BackgroundColor3 = Color3.fromRGB(43,43,43), Visible = false, BorderSizePixel = 1})
+                dropdown.ClipsDescendants = true
+                for i,opt in ipairs(options) do
+                    local optBtn = new("TextButton", {Parent = dropdown, Text = opt, TextColor3 = Color3.new(1,1,1), Size = UDim2.new(1,0,0,18), Position = UDim2.new(0,0,(i-1)*18,0), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1})
+                    optBtn.MouseButton1Click:Connect(function()
+                        sel.Text = opt
+                        dropdown.Visible = false
+                        pcall(callback, opt)
+                    end)
+                end
+                button.MouseButton1Click:Connect(function()
+                    dropdown.Visible = not dropdown.Visible
+                end)
+                local obj = {
+                    Get = function() return sel.Text end,
+                    Set = function(v) sel.Text = v end
+                }
+                table.insert(section.Items, obj)
+                return obj
+            end
+
+            table.insert(self.Sections, section)
+            return section
+        end
+
+        table.insert(self._tabs, tab)
+        return tab
+    end
+
+    -- Config UI helpers (global)
+    function lib:CreateConfigControls(section)
+        -- Save Button
+        local nameBox = section:CreateButton("Config Name (click Save to use)", function() end) -- placeholder; we will replace with TextBox-like UI below
+        -- we'll actually create a TextBox style via parent frame
+        local fake = nameBox
+        fake.BackgroundTransparency = 1
+        fake.Text = ""
+
+        -- create a custom row: TextBox, Save, Load, Refresh, Dropdown
+        local container = new("Frame", {Parent = section.Frame, Size = UDim2.new(1,-20,0,28), BackgroundColor3 = Color3.fromRGB(43,43,43), BorderSizePixel = 1})
+        local nameTxt = new("TextBox", {Parent = container, Size = UDim2.new(0.5,0,1,0), Position = UDim2.new(0,6,0,0), Text = "cfg1", ClearTextOnFocus = false, BackgroundColor3 = Color3.fromRGB(255,255,255), TextColor3 = Color3.fromRGB(0,0,0), BorderSizePixel = 1})
+        local btnSave = new("TextButton", {Parent = container, Size = UDim2.new(0,70,0,22), Position = UDim2.new(0.5,6,0,3), Text = "Save", BackgroundColor3 = Color3.fromRGB(15,102,166), TextColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
+        local btnLoad = new("TextButton", {Parent = container, Size = UDim2.new(0,70,0,22), Position = UDim2.new(0.5,82,0,3), Text = "Load", BackgroundColor3 = Color3.fromRGB(15,102,166), TextColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
+        local btnRefresh = new("TextButton", {Parent = container, Size = UDim2.new(0,50,0,22), Position = UDim2.new(1,-56,0,3), Text = "Refresh", BackgroundColor3 = Color3.fromRGB(43,43,43), TextColor3 = Color3.new(1,1,1), BorderSizePixel = 1})
+        local cfgDropdown = section:CreateDropdown("Configs", {}, function() end)
+        -- put dropdown's button in container position manually by moving UI parent - instead we'll just hide the auto one and create our own small dropdown display
+        -- Simpler: create small label that displays selected config and use dropdown from section:CreateDropdown above (it appended to the section Frame). Keep it simple:
+        lib._configDropdown = cfgDropdown
+
+        local function refreshList()
+            local files = list_cfg_files()
+            -- rebuild dropdown options: we'll create a new dropdown element by setting text options - easier is to replace the original dropdown by removing old ones and creating new
+            -- naive approach: set to first found
+            if #files == 0 then
+                cfgDropdown.Set("None")
+            else
+                cfgDropdown.Set(files[1])
+            end
+        end
+
+        btnRefresh.MouseButton1Click:Connect(function() refreshList() end)
+
+        btnSave.MouseButton1Click:Connect(function()
+            local name = nameTxt.Text:gsub("%s+","")
+            if name == "" then
+                -- create a default name like cfg1/cfg2
+                local files = list_cfg_files()
+                local i = 1
+                while true do
+                    local candidate = "cfg"..i
+                    local exists = false
+                    for _,v in ipairs(files) do if v == candidate then exists = true break end end
+                    if not exists then
+                        name = candidate
+                        break
+                    end
+                    i = i + 1
+                end
+            end
+            -- collect current ui state
+            local state = {toggles = {}, sliders = {}, dropdowns = {}}
+            for i,t in ipairs(self._tabs) do
+                for _,tabSec in ipairs(t.Sections) do
+                    for _,it in ipairs(tabSec.Items) do
+                        -- Toggles and sliders are tables; identify by existence of Get method
+                        if type(it) == "table" and it.Get then
+                            -- assume toggle if it has SetColor or SetBind? heuristics
+                            if it.SetColor or it.SetBind then
+                                table.insert(state.toggles, {value = it.Get and it.Get() or false})
+                            else
+                                -- assume slider/dropdown
+                                local ok, val = pcall(function() return it.Get() end)
+                                if ok and type(val) == "number" then
+                                    table.insert(state.sliders, val)
+                                else
+                                    table.insert(state.dropdowns, tostring(val))
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            save_config(name, state)
+            refreshList()
+        end)
+
+        btnLoad.MouseButton1Click:Connect(function()
+            local selected = lib._configDropdown and lib._configDropdown.Get() or nil
+            if not selected or selected == "None" then return end
+            local tbl = load_config(selected)
+            if tbl then
+                -- naive apply: attempt to apply toggles/sliders/dropdowns in simple order
+                local t_i, s_i, d_i = 1,1,1
+                for i,t in ipairs(self._tabs) do
+                    for _,tabSec in ipairs(t.Sections) do
+                        for _,it in ipairs(tabSec.Items) do
+                            if type(it) == "table" and it.Get then
+                                if it.SetColor or it.SetBind then
+                                    local v = tbl.toggles and tbl.toggles[t_i] and tbl.toggles[t_i].value
+                                    if v ~= nil then it.Set(v) end
+                                    t_i = t_i + 1
+                                else
+                                    local ok, val = pcall(function() return it.Get() end)
+                                    if ok and type(val) == "number" then
+                                        local v = tbl.sliders and tbl.sliders[s_i]
+                                        if v then it.Set(v) end
+                                        s_i = s_i + 1
+                                    else
+                                        local v = tbl.dropdowns and tbl.dropdowns[d_i]
+                                        if v then it.Set(v) end
+                                        d_i = d_i + 1
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+
+        refreshList()
+        return container
+    end
+
+    -- Refresh config listing: expose to user
+    function lib:RefreshConfigs()
+        ensure_cfg_fs()
+        local files = list_cfg_files()
+        return files
+    end
+
+    -- set default theme to orange per request
+    lib:SetTheme(DEFAULT_THEME)
+
+    -- return library instance
+    return lib
+end
+
+-- Example usage: (you can remove or comment this block in production)
+local __ilo = ILO.CreateWindow()
+__ilo:SetTheme(Color3.fromRGB(255,165,0)) -- default orange
+local t1 = __ilo:CreateTab("Home")
+local s1 = t1:CreateSection("Example")
+local tog = s1:CreateToggle("ESP", {ColorPicker = true, Bind = true, Default = false, Callback = function(state) print("ESP", state) end})
+local btn = s1:CreateButton("Do Thing", function() print("button pressed") end)
+local sl = s1:CreateSlider("FOV", 0, 180, 60, function(v) print("fov", v) end)
+local dd = s1:CreateDropdown("Target", {"Head","Body","Closest"}, function(c) print("target", c) end)
+local cfgSec = t1:CreateSection("Configs")
+cfgSec:CreateButton("Config: Save/Load (use below row)", function() end)
+-- create config controls in that section
+__ilo:CreateConfigControls(cfgSec)
+
+-- show UI initially (false -> closed)
+__ilo:SetOpen(false)
+
+-- Expose library globally for convenience
+getgenv = getgenv or function() return _G end
+getgenv().ILO = ILO
+
+return ILO
